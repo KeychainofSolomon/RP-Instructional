@@ -654,9 +654,13 @@ def cmd_day(a):
     n["day"] += 1
     af = n.setdefault("afflictions", {})
     for k in list(af):
+        if k == "grief_pending":
+            continue
         af[k] -= 1
         if af[k] <= 0:
             del af[k]
+            if k == "grief_delay" and af.get("grief_pending"):
+                af["grieving"] = af.pop("grief_pending")
     wts, st = n["needs"]["weight"], n["needs"]["state"]
     live = [r for r in RUNGS if wts[r] > 0]
     rung = wpick(live, [wts[r] for r in live])
@@ -818,7 +822,7 @@ FORM_TAGS = {
  "Violent Outburst": {"action", "rage"},
  # wounded responses
  "Wounded-Selfless": {"wounded"}, "Wounded-Panic": {"wounded"}, "Wounded-Stoic": {"wounded"},
- "Wounded-Shock": {"wounded"},
+ "Wounded-Shock": {"wounded"}, "Wounded-Betrayed": {"wounded"},
 }
 
 
@@ -866,13 +870,18 @@ CIRC = {
               repl={"Kind": "Protective", "Middle": "Distracted", "Hostile": "Cold Refusal"},
               inflect="hands busy with the wounded; barely looks up", speech=("low, mostly to the wounded", "volume"),
               approach={"humour": -2, "haggling": -2, "flattery": -1}),
- "grieving": R(itag={"sad"}, block={"levity", "display", "leisure"},
+ "protecting": R(itag={"action"}, block={"levity", "display", "leisure", "giving", "intimate", "sad"},
+                 repl={"Kind": "Protective", "Middle": "Wary", "Hostile": "Territorial"},
+                 inflect="keeps between them and harm", speech=("short", "flow"), slip=1,
+                 voices=("Commanding", "Devoted", "Vigilant"), approach={"humour": -1, "pressure": -1}),
+ "grieving": R(itag=lambda n: {"sad"} | PROCESSING[processing(n)][1], block={"levity", "display", "leisure"},
                repl={"Kind": lambda n: "Tender" if _ax(n, W) >= 1 else "Practical", "Middle": "Melancholic",
                      "Hostile": lambda n: "Reproach" if _ax(n, W) >= 0 else "Grudge"},
                swap={"Fear-Aggression": lambda n: "Reproach" if _ax(n, W) >= 0 else "Grudge"},
                soften=(lambda n: "laughs at the wrong moments" in n["quirks"] or (_ax(n, E) >= 2 and _ax(n, O) >= 2),
                        {"levity"}, "gallows humour, a little too bright"),
-               inflect="a stillness at the edges; their mind goes elsewhere mid-sentence", speech=("trailing", "flow"),
+               inflect=lambda n: "a stillness at the edges; " + PROCESSING[processing(n)][0],
+               speech=("trailing", "flow"),
                slip=2, voices=("Serious", "Mercurial", "Self-Sacrificing", "Devoted"),
                approach={"humour": -2, "haggling": -2, "flattery": -1, "pressure": -1, "patience": 1}),
  "sick": R(itag={"plain"}, block={"display", "levity", "action"},
@@ -925,11 +934,9 @@ CIRC = {
                  "Bargaining-Humour": lambda n: "Transactional" if _ax(n, D) >= 1 else None},
            inflect="one eye on the post", speech=("procedural", "register"), approach={"principle": 1, "haggling": -1}),
 }
-CONDS = ["hurt", "frozen", "afraid", "enraged", "stunned", "tending", "grieving", "sick", "exhausted",
+CONDS = ["hurt", "frozen", "afraid", "enraged", "stunned", "tending", "protecting", "grieving", "sick", "exhausted",
          "intoxicated", "starving", "solemn", "festive", "superior", "intimate", "public", "duty"]
-SHAKEN_TO = {"Fury": "enraged", "Freeze": "frozen", "Flight": "afraid", "Shock": "stunned",
-             "Tending": "tending", "Ritual": "solemn"}
-STRESS = {"hurt", "frozen", "afraid", "enraged", "stunned", "tending", "grieving", "solemn", "superior"}
+STRESS = {"hurt", "frozen", "afraid", "enraged", "stunned", "tending", "protecting", "grieving", "solemn", "superior"}
 QUIRK_KIND = {
  "counts money twice": "compulsive", "never sits with back to a door": "stress",
  "speaks of self in third person when nervous": "stress", "hums the same four notes": "idle",
@@ -1143,8 +1150,11 @@ def cmd_meet(a):
     dang = clamp(dang, -1, 1)
     # violence response decided first: it is a circumstance for everything below
     if a.violence:
-        resp = violence_response(n, a.hurt)
-        steady = violence_steady(n, resp, n["dials"])
+        members = load(a.circle).get("members", []) if a.circle else []
+        vcls = relation_to(n, a.victim, members)[0]
+        acls = relation_to(n, a.attacker, members)[0]
+        resp = violence_response(n, a.hurt, vcls, acls, a.symbol)
+        steady = violence_steady(n, resp, n["dials"], vcls)
         if n.get("today"):
             n["today"]["shaken"] = None if steady else resp
             save(n, a.file)
@@ -1196,6 +1206,11 @@ def cmd_meet(a):
     raw = shown[key][1 if use_alt else 0]
     form, soft, ok, yielded = resolve(raw, key, active, n)
     infl, sp, dropped_col = colour_for(n, active, td["side"])
+    rs = td.get("shaken")
+    if rs in RESP and RESP[rs][0] in active:
+        higher = active[:active.index(RESP[rs][0])]
+        if not _blocked_by(RESP[rs][2], higher, n) and RESP[rs][1] not in infl:
+            infl.insert(0, RESP[rs][1])
     side_note = infl.pop() if (infl and SIDE_TEXT.get(n["contradiction"]["pair"]) and
                                infl[-1] in [x[0] for x in SIDE_TEXT[n["contradiction"]["pair"]]]) else None
     infl += soft + exempt_notes
@@ -1273,20 +1288,14 @@ def cmd_audit(a):
         if f not in SBY: problems.append("face is not a style: " + f)
     for q in QUIRKS:
         if q not in QUIRK_KIND: problems.append("quirk without a kind: " + q)
-    for r in RESPONSES:
+    for r, (cond, desc, tg) in RESP.items():
         if r.startswith("Wounded") and r not in FORM_TAGS: problems.append("wounded response without tags: " + r)
-        if not r.startswith("Wounded") and r not in SHAKEN_TO and r not in STEADY and r != "Spectator":
-            problems.append("violence response with no circumstance: " + r)
-    for pair in OPPOSITES:
-        if pair not in SIDE_TEXT: problems.append("contradiction without side text: " + pair)
-    for c in CONDS:
-        r = CIRC[c]
-        for t in r.get("block", set()):
-            if t not in TAGS_ALL: problems.append("%s blocks unknown tag %s" % (c, t))
-        if r.get("block") and set(r.get("repl", {})) != {"Kind", "Middle", "Hostile"}:
-            problems.append("%s blocks tags but lacks a replacement for every band" % c)
-        for t in r.get("swap", {}):
-            if t not in forms: problems.append("%s swaps unknown form %s" % (c, t))
+        if cond is not None and cond not in CONDS: problems.append("response %s points at unknown circumstance %s" % (r, cond))
+        if not tg <= TAGS_ALL: problems.append("response %s has unknown colour tags" % r)
+    for k, (txt, tg) in PROCESSING.items():
+        if not tg <= TAGS_ALL: problems.append("processing %s has unknown colour tags" % k)
+    for role in ROLES:
+        if role not in GRIEF_DAYS and role not in ("enemy",): problems.append("role without grief length: " + role)
     profiles = []
     for axes in ([0] * 7, [3] * 7, [-3] * 7, [-3, 3, 3, -3, -3, 3, 3], [3, -3, -3, 3, 3, -3, -3],
                  [0, 2, 0, 2, 2, 2, -1], [-2, -2, 2, -1, 3, 1, 3]):
@@ -1295,7 +1304,8 @@ def cmd_audit(a):
             n = {"axes": axes, "quirks": extra.get("quirks", []),
                  "voices": [{"style": "Predator" if extra.get("predator") else
                              "Dramatic" if extra.get("dramatic") else "Serious", "frac": 1}],
-                 "authenticity": {"kind": "Hollow" if extra.get("hollow") else "Genuine", "faces": []}}
+                 "authenticity": {"kind": "Hollow" if extra.get("hollow") else "Genuine", "faces": []},
+                 "creed": "Faith" if extra.get("dramatic") else "Order", "station": "Hand", "name": "x"}
             profiles.append(n)
     import itertools
     combos = [()]
@@ -1328,6 +1338,30 @@ def cmd_audit(a):
                             continue
                         if not _passes(out, c, n):
                             problems.append("%s still clashes with %s (from %s, %s)" % (out, c, f, ",".join(combo)))
+    classes = ("stranger", "familiar", "beloved", "charge", "revered", "authority", "rival", "enemy", "conceptual")
+    for n0 in [dict(p, creed=c, station=st, name="x") for p in profiles[:10] for c in CREEDS for st in ("Hand", "Sworn")]:
+        for vc in classes:
+            for ac in classes:
+                for hurt in (False, True):
+                    try:
+                        r = violence_response(n0, hurt, vc, ac, None)
+                    except Exception as e:
+                        problems.append("response crash %s/%s: %s" % (vc, ac, e)); continue
+                    if r not in RESP: problems.append("unknown response %s" % r)
+                    if vc in CLOSE and not hurt and violence_steady(n0, r, [0] * 7, vc) and r != "Performed":
+                        problems.append("steady while someone close is hurt: %s (%s)" % (r, vc))
+                    if not hurt and vc in ("beloved", "charge") and ac not in CLOSE and r in ("Satisfied", "Spectator", "Curiosity", "Business"):
+                        problems.append("cold response to a hurt %s: %s" % (vc, r))
+    for pair in OPPOSITES:
+        if pair not in SIDE_TEXT: problems.append("contradiction without side text: " + pair)
+    for c in CONDS:
+        r = CIRC[c]
+        for t in r.get("block", set()):
+            if t not in TAGS_ALL: problems.append("%s blocks unknown tag %s" % (c, t))
+        if r.get("block") and set(r.get("repl", {})) != {"Kind", "Middle", "Hostile"}:
+            problems.append("%s blocks tags but lacks a replacement for every band" % c)
+        for t in r.get("swap", {}):
+            if t not in forms: problems.append("%s swaps unknown form %s" % (c, t))
     for c in CONDS:
         r = CIRC[c]
         if r.get("inflect") and "itag" not in r:
@@ -1438,8 +1472,23 @@ def cmd_event(a):
         notes.append("shame: Selfhood starved; they will not forget doing it")
     af = n.setdefault("afflictions", {})
     if a.kind == "loss":
-        af["grieving"] = 7 + d(7)
-        notes.append("grieving for %d days" % af["grieving"])
+        cls, role, loy = relation_to(n, a.about) if a.about else ("familiar", "kin", 3)
+        if cls == "enemy":
+            st["Safety"] = clamp(st["Safety"] + 1, -2, 1)
+            notes.append("an enemy gone: no grief; whatever they show, they show plainly")
+        else:
+            base, spread = GRIEF_DAYS.get(role or "kin", (7, 7))
+            days = base + (d(spread) if spread else 0)
+            if role in ("mentor", "spiritual", "symbol"):
+                st["Meaning"] = clamp(st["Meaning"] - 2, -2, 1)
+            if days:
+                if processing(n) == "Numb":
+                    af["grief_delay"] = d(3)
+                    af["grief_pending"] = days
+                    notes.append("numb: grief arrives in %d days and lasts %d" % (af["grief_delay"], days))
+                else:
+                    af["grieving"] = days
+                    notes.append("grieving for %d days (%s)" % (days, PROCESSING[processing(n)][0]))
     if a.kind == "fell-ill":
         af["sick"] = d(3) + 1
         notes.append("sick for %d days" % af["sick"])
@@ -1526,6 +1575,84 @@ def cmd_status(a):
         msg += ". Record a loss event for each person tied to them."
     print(msg)
 
+# ---------- relationships and processing ----------
+ROLES = ["child", "parent", "sibling", "spouse", "lover", "kin", "friend", "dependant", "student", "mentor",
+         "spiritual", "master", "subordinate", "follower", "comrade", "rival", "enemy", "creditor", "debtor",
+         "symbol"]
+ROLE_OF_KIND = {"kin": "kin", "lover": "lover", "friend": "friend", "mentor": "mentor", "rival": "rival",
+                "enemy": "enemy", "creditor": "creditor", "debtor": "debtor", "master": "master", "group": "comrade",
+                "dependant": "dependant", "cause": "symbol", "object": "symbol", "place": "symbol"}
+
+
+def rel_class(role, loyalty):
+    """What a relationship is to the one feeling it."""
+    if role in ("child", "parent", "sibling", "spouse", "lover", "dependant"):
+        return "beloved"
+    if role in ("kin", "friend"):
+        return "beloved" if loyalty >= 4 else "familiar"
+    if role in ("student", "subordinate", "follower"):
+        return "charge" if loyalty >= 3 else "familiar"
+    if role in ("mentor", "spiritual"):
+        return "revered"
+    if role == "master":
+        return "authority"
+    if role in ("comrade", "creditor", "debtor"):
+        return "familiar"
+    if role in ("rival", "enemy"):
+        return role
+    if role == "symbol":
+        return "conceptual"
+    return "stranger"
+
+
+def relation_to(n, name, circle_members=()):
+    """(class, role, loyalty) of n toward the named person or thing, from n's own ties."""
+    if not name:
+        return ("stranger", None, 0)
+    low = name.lower()
+    for t in n["ties"]:
+        if (t.get("who") or "").lower() == low:
+            role = t.get("role") or ROLE_OF_KIND.get(t["kind"], "comrade")
+            return (rel_class(role, t["loyalty"]), role, t["loyalty"])
+    if low in [m.lower() for m in circle_members] and n["name"] in circle_members:
+        return ("familiar", "comrade", 2)
+    return ("stranger", None, 0)
+
+
+def processing(n):
+    """How this person processes what happens to them. Worked out from traits, not rolled."""
+    a = n["axes"]
+    if n["authenticity"]["kind"] == "Hollow":
+        return "Performed"
+    if a[V] >= 2 and a[E] <= -1: return "Numb"
+    if a[V] >= 2: return "Expressive"
+    dom = n["voices"][0]["style"]
+    if (n["creed"] == "Faith" or dom in ("Zealot", "Devoted")) and a[V] <= 1: return "Devotional"
+    if a[M] >= 2: return "Action"
+    if a[D] >= 2: return "Contained"
+    if a[W] >= 2: return "Caretaking"
+    if a[O] >= 2: return "Intellectual"
+    if a[C] <= -1: return "Bargaining"
+    return "Contained"
+
+
+PROCESSING = {  # how grief and shock show, by processing style: (colour, colour tags)
+ "Expressive": ("weeps or rages openly, then apologises for it", {"display", "action"}),
+ "Numb": ("goes about the day as if nothing has happened", {"plain"}),
+ "Devotional": ("keeps vigil; the old words, the old motions", {"formal"}),
+ "Action": ("busies themself with arrangements, or with who did it", {"action"}),
+ "Contained": ("keeps working; won't stop working", {"plain"}),
+ "Caretaking": ("looks after everyone else", {"warm"}),
+ "Intellectual": ("talks about it in facts and dates", {"cold"}),
+ "Bargaining": ("talks as if it can still be undone", {"guarded"}),
+ "Performed": ("says the right things, a beat late", {"plain"}),
+}
+GRIEF_DAYS = {"child": (21, 14), "spouse": (14, 14), "lover": (14, 14), "parent": (10, 10), "sibling": (10, 10),
+              "dependant": (10, 10), "kin": (7, 7), "friend": (7, 7), "mentor": (7, 7), "spiritual": (10, 10),
+              "student": (5, 5), "subordinate": (3, 4), "follower": (3, 4), "comrade": (2, 3), "master": (3, 4),
+              "rival": (1, 3), "creditor": (0, 2), "debtor": (0, 2), "symbol": (7, 7)}
+
+
 # ---------- violence: register, dissonance, responses ----------
 REGISTERS = {
  "Rupture": "Violence tears the ordinary. Short sentences at the moment, then the ordinary resumes around it, "
@@ -1536,100 +1663,245 @@ REGISTERS = {
  "Weather": "Violence is as ordinary as weather. Long plain sentences joined with and. Flat verbs, exact "
             "nouns, no feeling named. The land, the light and the animals go on, indifferent and enormous.",
 }
-DISSONANCE = [
+DISSONANCE = [  # fallback only: a place sheet is the real source
  "a radio, record or street musician keeps playing the same cheerful tune",
- "someone at the next table finishes their meal",
- "a child laughs somewhere out of sight",
- "the weather is beautiful: clean light, a soft wind",
- "a bird lands nearby and goes about its business",
+ "someone at the next table finishes their meal", "a child laughs somewhere out of sight",
+ "the weather is beautiful: clean light, a soft wind", "a bird lands nearby and goes about its business",
  "a hymn, chant or ritual next door carries on without missing a word",
  "the one who did it apologises for the mess, sincerely",
  "someone straightens a picture or a tablecloth that got knocked",
- "the price of something is mentioned, as if it matters now",
- "an animal comes to sniff at the blood",
- "a pot boils over in the kitchen and no one moves it",
- "a clock or bell marks the hour",
- "a celebration nearby: music, toasts, dancing, going on",
- "the wounded one apologises to someone",
- "a joke is finished, out of habit, and someone laughs at it",
- "a dropped coin rolls in a long circle and settles",
- "the light on the wall is lovely",
- "someone keeps counting money, losing their place, starting again",
- "someone hums a lullaby without knowing they are doing it",
- "a kettle starts to whistle",
+ "the price of something is mentioned, as if it matters now", "an animal comes to sniff at the blood",
+ "a pot boils over in the kitchen and no one moves it", "a clock or bell marks the hour",
+ "a celebration nearby: music, toasts, dancing, going on", "the wounded one apologises to someone",
+ "a joke is finished, out of habit, and someone laughs at it", "a dropped coin rolls in a long circle and settles",
+ "the light on the wall is lovely", "someone keeps counting money, losing their place, starting again",
+ "someone hums a lullaby without knowing they are doing it", "a kettle starts to whistle",
 ]
-AFTERMATH = [
- "the blood goes dark and dull faster than expected", "flies arrive", "someone fetches a bucket and a brush",
- "the smell stays in clothes and hair", "the room is too quiet; small sounds are very loud",
- "a shoe has come off and no one puts it back", "the furniture is moved back, almost to where it was",
- "people speak about something else entirely", "someone is sick, quietly, outside",
- "the meal goes cold on the table", "a door that was always open is now kept shut",
- "nobody sits in that chair again that day",
+PLACE_KINDS = {  # how a place's own fixtures turn dissonant
+ "sound": ["{x} goes on, exactly on time", "{x} doesn't stop"],
+ "light": ["{x} is lovely", "{x} falls across all of it the same"],
+ "animal": ["{x} go about their business", "{x} come to look, then lose interest"],
+ "routine": ["{x} happens anyway, on schedule", "someone starts on {x} out of habit"],
+ "object": ["{x} sits there, untouched", "someone straightens {x}"],
+ "smell": ["{x} is still in the air", "{x} cuts through everything"],
+ "person": ["{x} keeps at what they were doing", "{x} looks up, then back down"],
+ "weather": ["{x} goes on outside", "{x} doesn't care"],
+ "mark": ["{x}, still", "someone has set something down over {x}"],
+}
+AFTERMATH = [  # (what happens now, what the place keeps)
+ ("the blood goes dark and dull faster than expected", "a stain that won't scrub out"),
+ ("flies arrive", "a smell that comes back in warm weather"),
+ ("someone fetches a bucket and a brush", "flagstones scrubbed paler than the rest"),
+ ("the smell stays in clothes and hair", "a smell no one mentions"),
+ ("the room is too quiet; small sounds are very loud", "a quiet that settles there at that hour"),
+ ("a shoe has come off and no one puts it back", "a shoe no one will move"),
+ ("the furniture is moved back, almost to where it was", "a chair standing a little out of place"),
+ ("people speak about something else entirely", "a subject no one raises there"),
+ ("someone is sick, quietly, outside", "a corner people avoid"),
+ ("the meal goes cold on the table", "a place at table no one sits in"),
+ ("a door that was always open is now kept shut", "a door that stays shut"),
+ ("nobody sits in that chair again that day", "a chair nobody uses"),
 ]
-RESPONSES = {
- "Wounded-Panic": "pleads, bargains, calls for someone; breath and words break",
- "Wounded-Stoic": "quiet, practical about their own wound, asks for a specific thing (cloth, water, light)",
- "Wounded-Selfless": "asks after someone else before themself",
- "Wounded-Shock": "looks at the wound as if it belongs to someone else; says something ordinary",
- "Curiosity": "calm interest; studies what happened, may remark on it plainly, unhurried",
- "Business": "calm, takes charge; courteous, uses soft words for hard things ('it's handled', 'we'll talk to him')",
- "Tending": "goes to the wounded regardless of the danger; hands busy, voice low",
- "Ritual": "set words, prayer or rite; the body does the old motions",
- "Fury": "loud, forward, wants to hit back now; may break something",
- "Freeze": "does not move; holds whatever they were holding",
- "Flight": "leaves, fast, by the nearest way; may come back later ashamed or not at all",
- "Spectator": "watches, says nothing, misses nothing",
- "Shock": "keeps doing the ordinary thing a moment too long, then stops",
+RESP = {  # response: (circumstance it puts them in, or None when outwardly unchanged; description; colour tags)
+ "Wounded-Selfless": ("hurt", "asks after someone else before themself", {"wounded"}),
+ "Wounded-Panic": ("hurt", "pleads, bargains, calls for someone; breath and words break", {"wounded"}),
+ "Wounded-Stoic": ("hurt", "quiet, practical about their own wound; asks for cloth, water, light", {"wounded"}),
+ "Wounded-Shock": ("hurt", "looks at the wound as if it belongs to someone else; says something ordinary", {"wounded"}),
+ "Wounded-Betrayed": ("hurt", "looks at the one who did it; asks why", {"wounded"}),
+ "Frantic": ("tending", "frantic hands; says their name over and over", {"action", "display"}),
+ "Tending": ("tending", "goes to the wounded regardless of the danger; hands busy, voice low", {"warm"}),
+ "Clinical": ("tending", "presses, counts, gives short orders; the voice flat", {"plain"}),
+ "Vigil": ("tending", "kneels by them and keeps the old words", {"formal"}),
+ "Shield": ("protecting", "puts their body between them and harm; faces the one who did it", {"action"}),
+ "Covering": ("protecting", "steps between the one who did it and everyone else", {"action"}),
+ "Fury": ("enraged", "loud, forward, wants to hit back now; may break something", {"action", "display"}),
+ "Freeze": ("frozen", "does not move; holds whatever they were holding", {"guarded"}),
+ "Torn": ("frozen", "looks from one of them to the other", {"guarded"}),
+ "Flight": ("afraid", "leaves, fast, by the nearest way; may come back later or not at all", {"action"}),
+ "Shock": ("stunned", "keeps doing the ordinary thing a moment too long, then stops", {"plain"}),
+ "Denial": ("stunned", "tells them to get up, that it's nothing", {"guarded"}),
+ "Conflicted": ("stunned", "starts forward, stops", {"guarded"}),
+ "Ritual": ("solemn", "set words, prayer or rite; the body does the old motions", {"formal"}),
+ "Obeys": ("superior", "does what they're told; doesn't look at the body", {"formal"}),
+ "Business": (None, "calm, takes charge; courteous, soft words for hard things", {"formal"}),
+ "Curiosity": (None, "calm interest; studies what happened, may remark on it plainly", {"cold"}),
+ "Spectator": (None, "watches, says nothing, misses nothing", {"guarded"}),
+ "Satisfied": (None, "watches to the end; doesn't move to help", {"cold"}),
+ "Performed": (None, "the right gestures, a beat late", {"plain"}),
+}
+RESPONSES = {k: v[1] for k, v in RESP.items()}
+SHAKEN_TO = {k: v[0] for k, v in RESP.items() if v[0] and v[0] != "hurt"}
+STEADY = tuple(k for k, v in RESP.items() if v[0] is None)
+CLOSE = ("beloved", "revered", "charge", "conceptual")
+BY_PROC = {
+ "beloved": {"Expressive": "Frantic", "Contained": "Tending", "Numb": "Freeze", "Action": "Shield",
+             "Devotional": "Vigil", "Intellectual": "Clinical", "Bargaining": "Denial", "Caretaking": "Tending"},
+ "revered": {"Expressive": "Frantic", "Contained": "Tending", "Numb": "Freeze", "Action": "Shield",
+             "Devotional": "Vigil", "Intellectual": "Clinical", "Bargaining": "Denial", "Caretaking": "Tending"},
+ "charge": {"Expressive": "Frantic", "Contained": "Tending", "Numb": "Freeze", "Action": "Shield",
+            "Devotional": "Tending", "Intellectual": "Clinical", "Bargaining": "Tending", "Caretaking": "Tending"},
+ "conceptual": {"Expressive": "Fury", "Contained": "Shock", "Numb": "Freeze", "Action": "Fury",
+                "Devotional": "Ritual", "Intellectual": "Shock", "Bargaining": "Denial", "Caretaking": "Shock"},
 }
 
 
-def violence_response(n, hurt):
+def violence_response(n, hurt, vcls="stranger", acls="stranger", symbol=None):
+    """Response to violence, from who was hurt, who did it, how this person processes, and their nature."""
     a = n["axes"]
     styles = {v["style"]: v["frac"] for v in n["voices"]}
     dom = n["voices"][0]["style"]
+    proc = processing(n)
     if hurt:
+        if acls in ("beloved", "revered", "charge"): return "Wounded-Betrayed"
         if a[W] >= 2: return "Wounded-Selfless"
         if a[V] >= 2: return "Wounded-Panic"
         if a[V] <= -2: return "Wounded-Stoic"
         return "Wounded-Shock"
+    if proc == "Performed":
+        return "Performed"
+    if symbol and symbol == n["creed"] and vcls == "stranger":
+        vcls = "conceptual"
+    if acls in CLOSE and vcls not in CLOSE:
+        return "Covering" if (proc in ("Action", "Contained", "Intellectual") or a[M] >= 1) else "Torn"
+    if vcls in CLOSE and acls in CLOSE:
+        return "Torn"
+    if acls == "authority" and vcls not in CLOSE and (a[D] >= 1 or a[M] <= -1 or n["station"] == "Sworn"):
+        return "Obeys"
+    if vcls in BY_PROC:
+        return BY_PROC[vcls][proc]
+    if vcls == "authority":
+        if n["station"] == "Sworn" or a[D] >= 2 or dom == "Devoted": return "Shield"
+        if dom in ("Professional", "Commanding", "Schemer"): return "Business"
+    if vcls == "rival":
+        if a[W] >= 2: return "Tending"
+        if styles.get("Predator", 0) >= 0.25: return "Curiosity"
+        return "Conflicted"
+    if vcls == "enemy":
+        if a[W] >= 2 or n["creed"] == "Mercy": return "Tending"
+        if a[C] <= -1 or a[W] <= -2: return "Satisfied"
+        return "Spectator"
+    if vcls == "familiar" and a[W] >= 1 and a[V] <= 1:
+        return "Tending"
+    # a stranger: nature and creed decide
     if styles.get("Predator", 0) >= 0.25 or (a[W] <= -3 and a[V] <= -2): return "Curiosity"
     if dom in ("Professional", "Commanding", "Schemer") or (a[D] >= 2 and a[V] <= -1): return "Business"
-    if a[W] >= 2 and a[V] <= 1: return "Tending"
+    if (a[W] >= 2 or n["creed"] == "Mercy") and a[V] <= 1: return "Tending"
+    if n["creed"] == "Justice" and a[V] >= 2 and a[M] >= 1: return "Fury"
     if (n["creed"] == "Faith" or dom in ("Zealot", "Devoted")) and a[E] <= 0 and a[V] <= 1: return "Ritual"
+    if n["creed"] in ("Strength", "Thrill") and a[V] <= 0: return "Curiosity"
     if a[V] >= 2 and a[M] >= 1: return "Fury"
     if a[V] >= 2: return "Freeze" if a[E] <= -1 else "Flight"
+    if n["creed"] == "Security" and a[V] >= 1: return "Flight"
     if a[E] <= -2: return "Spectator"
     return "Shock"
 
 
-STEADY = ("Business", "Curiosity", "Wounded-Stoic")
-
-
-def violence_steady(n, resp, dials):
-    """True when violence doesn't change how they come across: it is already who they are."""
-    if resp in STEADY or n["axes"][V] <= -2:
+def violence_steady(n, resp, dials, vcls="stranger"):
+    """True when violence doesn't change how they come across: it is already who they are.
+    Never true when someone close to them is involved, except for the hollow."""
+    if resp == "Performed":
         return True
-    return dial(dials, "V") >= 3 and n["axes"][V] <= 0 and not resp.startswith("Wounded")
+    if vcls in CLOSE:
+        return False
+    if resp in STEADY:
+        return True
+    return dial(dials, "V") >= 3 and n["axes"][V] <= 0 and resp in ("Shock", "Spectator")
+
+
+def place_dissonance(pl, k):
+    """Draw k dissonant beats from the place's own fixtures, least-used first."""
+    fx = pl.get("fixtures", []) + [{"kind": "mark", "text": m} for m in pl.get("marks", [])]
+    used = pl.setdefault("used", {})
+    if not fx:
+        return []
+    order = sorted(fx, key=lambda f: (used.get(f["text"], 0), random.random()))
+    out = []
+    for f in order[:k]:
+        tpl = random.choice(PLACE_KINDS.get(f["kind"], ["{x}"]))
+        txt = tpl.replace("{x}", f["text"])
+        out.append(txt[0].upper() + txt[1:])
+        used[f["text"]] = used.get(f["text"], 0) + 1
+    return out
 
 
 def cmd_violence(a):
     ns = [load(p) for p in a.files]
+    pl = load(a.place) if a.place else None
     dials = parse_dials(a.dials) if a.dials else (load(a.world)["dials"] if a.world else
-                                                  (ns[0]["dials"] if ns else list(DEFAULT_DIALS)))
+                                                  (pl["dials"] if pl and pl.get("dials") else
+                                                   (ns[0]["dials"] if ns else list(DEFAULT_DIALS))))
     v, o = dial(dials, "V"), dial(dials, "O")
     reg = "Weather" if v >= 3 else "Trade" if (v == 2 or (o >= 2 and dial(dials, "D") >= 2)) else "Rupture"
     print("[narrator only] Register: %s. %s" % (reg, REGISTERS[reg]))
     k = 2 if reg != "Rupture" else 1 + (d(2) == 2)
-    for beat in random.sample(DISSONANCE, k):
+    beats = place_dissonance(pl, k) if pl else []
+    if len(beats) < k:
+        if pl is not None:
+            print("(The place sheet is thin; add what is always there with `place --add`.)")
+        beats += random.sample(DISSONANCE, k - len(beats))
+    for beat in beats:
         print("Dissonance: " + beat)
-    print("Aftermath: " + random.choice(AFTERMATH))
+    now, keeps = random.choice(AFTERMATH)
+    print("Aftermath: " + now)
+    if pl is not None:
+        pl.setdefault("marks", []).append(keeps)
+        pl.setdefault("history", []).append(now)
+        save(pl, a.place)
+        print("The place keeps: " + keeps)
     hurt = set(x.lower() for x in (a.hurt or []))
+    members = load(a.circle).get("members", []) if a.circle else []
     for n in ns:
-        r = violence_response(n, n["name"].lower() in hurt)
-        print("%s: %s - %s%s" % (n["name"], r, RESPONSES[r],
-              " | outwardly unchanged: this is already who they are" if violence_steady(n, r, dials)
-              else " | outward manner changes for the rest of the day"))
+        vc = relation_to(n, a.victim, members)
+        ac = relation_to(n, a.attacker, members)
+        r = violence_response(n, n["name"].lower() in hurt, vc[0], ac[0], a.symbol)
+        st = violence_steady(n, r, dials, vc[0])
+        rel = []
+        if a.victim and vc[0] != "stranger": rel.append("%s is their %s" % (a.victim, vc[1]))
+        if a.attacker and ac[0] != "stranger": rel.append("%s is their %s" % (a.attacker, ac[1]))
+        if a.symbol and a.symbol == n["creed"]: rel.append("it strikes at what they hold highest")
+        print("%s (%s%s): %s - %s%s" % (n["name"], processing(n), "; " + "; ".join(rel) if rel else "", r,
+                                        RESPONSES[r], " | outwardly unchanged: this is already who they are" if st
+                                        else " | outward manner changes for the rest of the day"))
     print("Show all of it from outside. Name no one's feelings; let the dissonance sit unexplained.")
+
+
+def cmd_place(a):
+    import os
+    pl = load(a.file) if os.path.exists(a.file) else {"name": a.name or a.file, "dials": parse_dials(a.dials),
+                                                       "fixtures": [], "marks": [], "used": {}, "history": []}
+    if a.dials:
+        pl["dials"] = parse_dials(a.dials)
+    for item in a.add or []:
+        kind, _, text = item.partition(":")
+        kind = kind.strip().lower()
+        if kind not in PLACE_KINDS or not text.strip():
+            sys.exit("--add takes kind:text, kind one of " + ", ".join(k for k in PLACE_KINDS if k != "mark"))
+        pl["fixtures"].append({"kind": kind, "text": text.strip()})
+    save(pl, a.file)
+    print("%s | dials %s" % (pl["name"], ",".join(map(str, pl["dials"]))))
+    for f in pl["fixtures"]:
+        print("  always there (%s): %s" % (f["kind"], f["text"]))
+    for m in pl.get("marks", []):
+        print("  since then: " + m)
+
+
+def cmd_tie(a):
+    n = load(a.file)
+    t = next((t for t in n["ties"] if (t.get("who") or "").lower() == a.to.lower()), None)
+    if t is None and a.relabel:
+        t = next((t for t in n["ties"] if t["label"] == a.relabel), None)
+    if t is None:
+        t = {"kind": "kin", "label": a.to, "loyalty": 3, "reach": 3}
+        n["ties"].append(t)
+    t["who"], t["role"], t["label"] = a.to, a.role, a.to
+    t["kind"] = {"child": "kin", "parent": "kin", "sibling": "kin", "spouse": "lover", "student": "dependant",
+                 "subordinate": "dependant", "follower": "dependant", "spiritual": "mentor", "comrade": "group",
+                 "symbol": "cause"}.get(a.role, a.role if a.role in TIE_KINDS else "friend")
+    if a.loyalty: t["loyalty"] = a.loyalty
+    if a.reach: t["reach"] = a.reach
+    save(n, a.file)
+    print("%s: %s is their %s (loyalty %d, reach %d) -> %s" % (n["name"], a.to, a.role, t["loyalty"], t["reach"],
+                                                              rel_class(a.role, t["loyalty"])))
 
 
 def cmd_tide(a):
@@ -1696,6 +1968,8 @@ def main():
     x.add_argument("--contagion", type=int, choices=[-1, 1]); x.add_argument("--danger", nargs="*", choices=DANGER)
     x.add_argument("--audience", action="store_true"); x.add_argument("--opposed", action="store_true")
     x.add_argument("--hurt", action="store_true"); x.add_argument("--violence", action="store_true")
+    x.add_argument("--victim"); x.add_argument("--attacker"); x.add_argument("--symbol", choices=CREEDS)
+    x.add_argument("--circle")
     for fl in ("solemn", "festive", "superior", "duty", "drunk", "tired", "sick", "grieving", "private"):
         x.add_argument("--" + fl, action="store_true")
     x.add_argument("--their-strength", type=int, default=2); x.add_argument("--ground", type=int, default=0)
@@ -1705,7 +1979,9 @@ def main():
     x.set_defaults(f=cmd_ask)
     x = sp.add_parser("event"); x.add_argument("file"); x.add_argument("kind", choices=list(EVENTS))
     x.add_argument("--who", default="player"); x.add_argument("--size", type=int, choices=[1, 2])
-    x.add_argument("--trade", action="store_true"); x.add_argument("--note"); x.set_defaults(f=cmd_event)
+    x.add_argument("--trade", action="store_true"); x.add_argument("--note")
+    x.add_argument("--about", help="who or what the event concerns, as named in their ties (for loss)")
+    x.set_defaults(f=cmd_event)
     x = sp.add_parser("affinity"); x.add_argument("a"); x.add_argument("b")
     x.add_argument("--tie", choices=["kin", "lover", "friend", "mentor", "rival", "enemy", "creditor", "debtor",
                                      "master", "dependant"]); x.set_defaults(f=cmd_affinity)
@@ -1715,7 +1991,15 @@ def main():
     x.add_argument("condition", choices=["present", "dead", "comatose", "amnesiac"])
     x.add_argument("--restore", action="store_true"); x.set_defaults(f=cmd_status)
     x = sp.add_parser("violence"); x.add_argument("files", nargs="*"); x.add_argument("--world")
-    x.add_argument("--dials"); x.add_argument("--hurt", nargs="*"); x.set_defaults(f=cmd_violence)
+    x.add_argument("--dials"); x.add_argument("--hurt", nargs="*"); x.add_argument("--place")
+    x.add_argument("--victim"); x.add_argument("--attacker"); x.add_argument("--symbol", choices=CREEDS)
+    x.add_argument("--circle"); x.set_defaults(f=cmd_violence)
+    x = sp.add_parser("place"); x.add_argument("file"); x.add_argument("--name"); x.add_argument("--dials")
+    x.add_argument("--add", nargs="*"); x.set_defaults(f=cmd_place)
+    x = sp.add_parser("tie"); x.add_argument("file"); x.add_argument("--to", required=True)
+    x.add_argument("--role", required=True, choices=ROLES); x.add_argument("--loyalty", type=int, choices=range(1, 7))
+    x.add_argument("--reach", type=int, choices=range(1, 7)); x.add_argument("--relabel")
+    x.set_defaults(f=cmd_tie)
     x = sp.add_parser("tide"); x.add_argument("world"); x.add_argument("--dials"); x.set_defaults(f=cmd_tide)
     x = sp.add_parser("audit"); x.set_defaults(f=cmd_audit)
     x = sp.add_parser("styles"); x.set_defaults(f=cmd_styles)
