@@ -42,16 +42,17 @@ can be seen, heard, touched, smelled and tasted) and leave in it what there is t
 a detail that doesn't add up, an absence, odd timing, two things that don't match. Never do the
 thinking for them.
 
-**NPC thoughts are not theirs.** A thought arises on its own, unpredictably. Where it comes from is
-a black box that draws on every level at once: the times, their circle, their own memories,
-ties, wants and habits, their day, their body, the people in the room, the place (its sounds,
-smells, tastes, marks), any danger present, and the words of the prose itself, every pull
-scrambled before the draw. The character never sees the box, never understands it, and doesn't
-know it exists; in the world, a thought simply occurs. If they wonder where it came from, they
-guess from what's around them, and the guess may be wrong. Their nature and circumstance decide
-only whether it shows and how (half a sentence said aloud and caught, a name under the breath, a
-flinch, a hand that stops, a pause, or nothing). Never narrate the thought itself. Show its
-ripple, or the exact words that slip out. Never mention the mechanism in the fiction.
+**NPC thoughts are not theirs.** A thought arises on its own. Where it comes from is not knowable,
+not to the character, not to whoever voices them, and nothing in the fiction refers to how thoughts
+come about. At the start of a scene the script may hand you a thought for someone: just the thought
+("the kettle", "Joren laughing on the boat", "a door left unlocked"), with no reason attached. If the
+character wonders where it came from, they guess from what's around them; the script offers their
+guess, and it's only a guess. Their nature and circumstance decide whether it shows and how (half a
+sentence said aloud and caught, a name under the breath, a flinch, a hand that stops, a pause, or
+nothing). Never narrate the thought itself. Show its ripple, or the exact words that slip out.
+
+Don't read the section of `scripts/forge.py` marked SEALED, and never open a sealed record file
+(`scene --seal`); those are for the people at the table, not for the narrator.
 
 **NPC inner life is never stated as fact.** Not "she's hiding something", not "he resents
 you", not "behind the smile, contempt". Show words, timing, hands, posture, what they do with

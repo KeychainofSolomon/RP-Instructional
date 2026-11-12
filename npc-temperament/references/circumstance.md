@@ -113,30 +113,17 @@ last the rest of that day. Exhaustion comes from the day itself.
 
 ## 6. Unbidden thoughts
 
-At the start of a scene (`scene`), each person has a 25% chance that a thought arises. Where it
-comes from is a **black box** that draws on every level:
+At the start of a scene (`scene`), a thought may arise in anyone present. It comes as the thought
+alone, with nothing about where it came from: that is unknowable, to the character and to whoever
+voices them, and the workings are sealed (don't read the SEALED section of the script). Pass the
+scene's place, circle, people present, danger and the prose so far to `scene`; what the script
+does with them stays inside.
 
-- **the times**: recent change, violence, scarcity, faith, strangeness;
-- **their circle's** day;
-- **their own**: memories (recent and intense ones weigh more), ties (by loyalty), what they
-  want, the pull of compulsions and habits, their codes, who they used to be, their small quirks;
-- **their day** and their feeling;
-- **their body**: hunger, tiredness, an ache;
-- **the encounter**: who is in the room;
-- **the place**: its sounds, smells, tastes, objects and marks;
-- **danger** present;
-- **the prose**: words just written into the scene (`scene --prose "..."`);
-- **nothing at all**: an old tune, a sum, a stranger's face.
+If the character wonders where a thought came from, the script offers a guess drawn from what's
+around them. It's their guess, made in good faith, and it's often wrong.
 
-The box picks a level, then a thought within it, scrambling every weight at both steps. A fresh
-grief dominates without drowning out the room: a man who just lost his friend thinks of a memory
-about half the time, and otherwise of his day, his ties, the danger, the people present, his
-body, the place, the times.
-
-**The character never sees the box, never understands it, and doesn't know it exists.** In the
-world, a thought simply occurs. The script also names something perceivable they might *put it
-down to* if they wonder aloud. That's their guess, and it's often wrong. Never mention the
-mechanism in the fiction.
+The people at the table, not the narrator, can keep a sealed record with `scene --seal record.jsonl`
+to check later how thoughts arose.
 
 Whether and how it shows depends on them and the moment (`meet` reports it):
 
@@ -152,6 +139,7 @@ Whether and how it shows depends on them and the moment (`meet` reports it):
 | anyone else | a glance at something, a pause mid-sentence |
 
 The thought is never named in narration. Only its ripple shows, or the exact words that slip.
+Nothing in the fiction ever refers to how thoughts come about.
 
 ## 7. Amendment review (required when adding anything)
 

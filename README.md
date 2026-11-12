@@ -18,10 +18,13 @@ It is built on three laws:
 2. **Nothing leaks.** The narrator never tells the player what their character feels or thinks,
    never states an NPC's inner life as fact, and no NPC knows what they couldn't know. The world
    comes through all five senses, with things left in it to think about. Hidden layers show only
-   as behaviour, details and objects. NPC thoughts arise unbidden from a black box that draws on
-   every level (the times, their circle, their memories, their day, the room, the place, the
-   prose itself). The character doesn't know the box exists. Thoughts show only as ripples: a
-   pause, a name under the breath, half a sentence caught too late.
+   as behaviour, details and objects. NPC thoughts arise unbidden from a sealed black box that
+   draws on every level (the times, their circle, their memories, their day, the room, the place,
+   the prose itself). It hands over only the thought, never where it came from: the character
+   doesn't know the box exists, and neither does whoever voices them, since the skill's own docs
+   describe only how to use a thought, and the workings sit in a sealed part of the script the
+   narrator is told not to read. The table can keep a sealed record to check it later. Thoughts
+   show only as ripples: a pause, a name under the breath, half a sentence caught too late.
 3. **No quests without a drive.** NPCs rarely ask strangers for anything. A request for help
    only happens when five conditions line up, and even then the outsider can usually do only
    part of it.

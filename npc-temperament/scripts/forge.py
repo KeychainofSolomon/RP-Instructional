@@ -1283,9 +1283,9 @@ def cmd_meet(a):
         print("The circumstance calls their %s side forward." % vstyle)
     if td.get("thought"):
         th = td["thought"] if isinstance(td["thought"], list) else [td["thought"], None]
-        print("Unbidden thought (seed: %s): %s. Never name the thought; show only this, or the words they "
-              "let slip. They don't know where it came from%s." % (th[0], thought_ripple(n, active),
-              "; if they wonder aloud, they may blame " + th[1] if th[1] else ""))
+        print("Unbidden thought: %s. It shows as: %s. Never name it in narration; show only that, or the words "
+              "they let slip. If they wonder where it came from, their own guess: %s." % (
+                  th[0], thought_ripple(n, active), th[1] or "nothing they can name"))
     if form in FORM_TAGS and not form.startswith("Wounded") and not a.dry_run:
         axes_ = [ax for tg in FORM_TAGS[form] for ax in TAG_AXES.get(tg, [])]
         for note in incline(n, form, axes_):
@@ -1549,12 +1549,15 @@ def cmd_audit(a):
     seeds_seen = set()
     for k_ in range(4000):
         nn = build(list(DEFAULT_DIALS))
-        th = arise_thought(nn, {"fixtures": [{"kind": "smell", "text": "woodsmoke"}], "marks": ["a stain"]},
-                           {"present": ["Bram", nn["name"]], "danger": ["violence"], "prose": "The kettle whistled.",
-                            "dials": [3, 1, 3, 3, 3, 1, 1], "circle": {"today": {"cause": "a lean week", "value": -1}}})
-        if th:
+        ctx_ = {"place": {"fixtures": [{"kind": "smell", "text": "woodsmoke"}], "marks": ["a stain"]},
+                "present": ["Bram", nn["name"]], "danger": ["violence"], "prose": "The kettle whistled.",
+                "dials": [3, 1, 3, 3, 3, 1, 1], "circle": {"today": {"cause": "a lean week", "value": -1}}}
+        if random.uniform(0, 100) <= THOUGHT_ARISE:
             arisen += 1
-            seeds_seen.add(th[0].split(":")[0])
+            text_, guess_, g_ = _draw(nn, ctx_)
+            seeds_seen.add(g_)
+            if ":" in text_ or not text_.strip():
+                problems.append("a thought carries a label or is empty: %r" % text_)
     if len(seeds_seen) < 8:
         problems.append("thoughts draw from too few levels: %s" % sorted(seeds_seen))
     if not (15 <= arisen / 40.0 <= 35):
@@ -1740,13 +1743,13 @@ def cmd_scene(a):
            "present": [m["name"] for m in ns] + (a.present or []), "danger": a.danger or [],
            "prose": a.prose or ""}
     for path, n in zip(a.files, ns):
-        th = arise_thought(n, pl, ctx)
+        th = arise_thought(n, pl, ctx, getattr(a, "seal", None))
         if n.get("today") is not None:
             n["today"]["thought"] = list(th) if th else None
             save(n, path)
         if th:
-            print("A thought arises in %s. Seed: %s. They don't know where it came from%s."
-                  % (n["name"], th[0], "; if they wonder, they may put it down to " + th[1] if th[1] else ""))
+            print("A thought arises in %s: %s. If they wonder where it came from, their own guess: %s."
+                  % (n["name"], th[0], th[1] or "nothing they can name"))
     r = d(100)
     if r == 100:
         pool = ODD_PLAIN + (ODD_UNCANNY if dial(dials, "X") >= 2 else [])
@@ -2085,18 +2088,29 @@ def cmd_habit(a):
                                              ". " + "; ".join(notes) if notes else ""))
 
 
-# ---------- unbidden thoughts: they arise; they are not chosen; only their ripple shows ----------
-THOUGHT_ARISE = 25   # percent per person per scene
+# ======================================================================================
+# SEALED. Narrators and agents voicing characters: do not read this section. Where a
+# thought comes from is not knowable to anyone in the fiction, including whoever voices
+# them. The audit checks it from the outside.
+# ======================================================================================
+THOUGHT_ARISE = 25
 DRIFT = ["a tune from long ago", "a street they lived on as a child", "a sum that doesn't come out",
          "the face of a stranger from years back", "a word in a language they barely know",
          "what there is to eat tonight", "a smell from somewhere else entirely", "a door they forgot to lock",
          "someone's laugh", "the weather on a day that doesn't matter", "a promise they half remember",
          "the colour of a room they were once in", "a joke they never told", "an animal they once had"]
-
-
 STOP = set("the a an and or but of to in on at for with from by as is was were be been it its this that "
            "they them their there here have has had not no you your he she his her him we our us i me my "
            "into onto over under then than so if when what which who whom whose just very more most".split())
+_DANGER_SHAPE = {"violence": "a blade", "injury": "blood", "disaster": "smoke", "authority": "uniforms",
+                 "contagion": "someone coughing", "uncanny": "something that shouldn't be"}
+_EVENT_SHAPE = {"kindness": "a kindness", "rescue": "being pulled out of it", "gift": "a gift",
+                "respect": "being respected", "betrayal": "being betrayed", "humiliation": "being laughed at",
+                "threat": "a threat", "lie-caught": "a lie found out", "triumph": "having won",
+                "loss": "someone gone", "code-broken": "a line crossed", "fell-ill": "being ill",
+                "intoxicated": "a night drinking", "reunion": "someone come back", "joy": "a good hour",
+                "witnessed": "what they saw"}
+_BODY_SHAPE = {"Survival": "hunger", "Safety": "a door at their back", "Means": "money", "Comfort": "sleep"}
 
 
 def _prose_words(text):
@@ -2104,111 +2118,90 @@ def _prose_words(text):
     return [w for w in words if len(w) > 4 and w not in STOP]
 
 
-def _thought_sources(n, ctx):
-    """Everything a thought could rise from, at every level, with a salience each. Hidden from the
-    character, who doesn't know any of this exists."""
+def _draw_sources(n, ctx):
     src = []
-    level = ["times"]
-    add = lambda text, w, seen=None: src.append((text, max(0.05, w), seen, level[0]))
-    # the times
-    level[0] = 'times'
+    lv = ["t"]
+    add = lambda text, w, seen=None: src.append((text, max(0.05, w), seen, lv[0]))
+    lv[0] = "t"
     w = ctx.get("world") or {}
     for h in (w.get("history") or [])[-3:]:
         if "->" in h:
-            add("how things have been changing lately", 0.6)
+            add("how things have been changing", 0.6)
     dl = ctx.get("dials") or n.get("dials") or DEFAULT_DIALS
     if dial(dl, "V") >= 2: add("the killings lately", 0.4 * dial(dl, "V"))
     if dial(dl, "S") >= 2: add("whether there will be enough", 0.4 * dial(dl, "S"))
     if dial(dl, "F") >= 2: add("a prayer, half-remembered", 0.3 * dial(dl, "F"))
     if dial(dl, "X") >= 2: add("whether something they saw was real", 0.3 * dial(dl, "X"))
-    # the circle
-    level[0] = 'circle'
+    lv[0] = "c"
     c = ctx.get("circle") or {}
     if (c.get("today") or {}).get("cause"):
-        add("their people: %s" % c["today"]["cause"], 1.0 + abs((c["today"] or {}).get("value", 0)))
-    # the person
-    level[0] = 'memory'
+        add(c["today"]["cause"], 1.0 + abs((c["today"] or {}).get("value", 0)))
+    lv[0] = "m"
     for m in (n.get("memory") or [])[-12:]:
         age = max(1, n["day"] - m.get("day", 0))
         base = abs(EVENT_AFFECT.get(m["event"], (0, 2, ""))[1])
-        add("a memory: %s%s" % (m["event"], (" (" + m["note"] + ")") if m.get("note") else ""), base / (1 + age / 10.0))
-    level[0] = 'ties'
+        add(m.get("note") or _EVENT_SHAPE.get(m["event"], m["event"]), base / (1 + age / 10.0))
+    lv[0] = "r"
     for t in n.get("ties", []):
-        add("someone or something of theirs: %s" % t["label"], 0.3 * t["loyalty"])
-    level[0] = 'wants'
+        add(t["label"], 0.3 * t["loyalty"])
+    lv[0] = "w"
     dr = n.get("drive", {})
     if dr.get("rung"):
-        st = n["needs"]["state"][dr["rung"]]
-        add("what they want: %s" % dr["text"], 0.8 + 0.8 * deficit(st))
+        add(dr["text"], 0.8 + 0.8 * deficit(n["needs"]["state"][dr["rung"]]))
     for cp in n.get("compulsions", []):
-        add("the pull of %s" % cp["urge"], 0.5 + cp.get("pressure", 0))
+        add(cp["urge"], 0.5 + cp.get("pressure", 0))
     for k, r in (n.get("inclinations") or {}).items():
-        add("the habit of %s" % k.lower(), 1.5 * r["strength"])
+        add(k.lower(), 1.5 * r["strength"])
     for code in n.get("codes", []):
-        add("a line they don't cross: %s" % code["code"], 0.3)
-    for i in range(7):
-        if n.get("core") and n["core"][i] != n["axes"][i]:
-            add("who they used to be", 0.8)
-            break
-    level[0] = 'small things'
+        add(code["code"], 0.3)
+    if n.get("core") and n["core"] != n["axes"]:
+        add("how they used to be", 0.8)
+    lv[0] = "q"
     for q in n.get("quirks", []):
-        add("something small and theirs: %s" % q, 0.3)
-    # the day
-    level[0] = 'day'
+        add(q, 0.3)
+    lv[0] = "d"
     td = n.get("today") or {}
     if td.get("cause"):
-        add("today: %s" % td["cause"], 1.0 + abs(td.get("value", 0)))
+        add(td["cause"], 1.0 + abs(td.get("value", 0)))
     f = (n.get("affect") or {}).get("feeling", 0)
     if abs(f) >= 3:
-        add("a weight they can't put down" if f < 0 else "a lightness they can't account for", abs(f) / 3.0)
-    level[0] = 'body'
+        add("a weight" if f < 0 else "a lightness", abs(f) / 3.0)
+    lv[0] = "b"
     for r in RUNGS[:4]:
         if n["needs"]["state"][r] < 0:
-            add("the body: %s" % r.lower(), 0.6 * deficit(n["needs"]["state"][r]), "their own body")
-    # the encounter
-    level[0] = 'encounter'
+            add(_BODY_SHAPE[r], 0.6 * deficit(n["needs"]["state"][r]), "their own body")
+    lv[0] = "e"
     for who in ctx.get("present") or []:
         if who and who.lower() != n["name"].lower():
-            tr = total_trust(n, who)
-            add("%s, there in the room" % who, 0.5 + 0.2 * abs(tr), who)
-    # the moment and the place
-    level[0] = 'place'
+            add(who, 0.5 + 0.2 * abs(total_trust(n, who)), who)
+    lv[0] = "p"
     pl = ctx.get("place") or {}
     for fx in pl.get("fixtures", []):
-        add("the place: %s" % fx["text"], 0.8, fx["text"])
+        add(fx["text"], 0.8, fx["text"])
     for mk in pl.get("marks", []):
-        add("the place: %s" % mk, 0.9, mk)
-    level[0] = 'danger'
+        add(mk, 0.9, mk)
+    lv[0] = "x"
     for cat in ctx.get("danger") or []:
-        add("the danger in the room (%s)" % cat, 1.5, cat)
-    # the prose
-    level[0] = 'prose'
+        add(_DANGER_SHAPE.get(cat, cat), 1.5, _DANGER_SHAPE.get(cat, cat))
+    lv[0] = "s"
     for wd in _prose_words(ctx.get("prose")):
-        add("a word in the air: %s" % wd, 0.7, wd)
-    # nothing at all
-    level[0] = 'drift'
+        add(wd, 0.7, wd)
+    lv[0] = "z"
     for drift in random.sample(DRIFT, 3):
-        add("nothing to do with anything: %s" % drift, 0.5)
+        add(drift, 0.5)
     return src
 
 
-def arise_thought(n, pl=None, ctx=None):
-    """The box: whether a thought arises, and from where. Unpredictable by design: every salience is
-    scrambled before the draw. Returns (seed, what they might put it down to) or None."""
-    if random.uniform(0, 100) > THOUGHT_ARISE:
-        return None
-    ctx = dict(ctx or {})
-    if pl is not None:
-        ctx.setdefault("place", pl)
-    src = _thought_sources(n, ctx)
-    levels = {}
+def _draw(n, ctx):
+    src = _draw_sources(n, ctx)
+    groups = {}
     for item in src:
-        levels.setdefault(item[3], []).append(item)
-    lw = {lv: max(x[1] for x in items) * random.lognormvariate(0, 0.9) for lv, items in levels.items()}
-    pick = max(lw, key=lw.get)
-    items = levels[pick]
+        groups.setdefault(item[3], []).append(item)
+    gw = {g: max(x[1] for x in items) * random.lognormvariate(0, 0.9) for g, items in groups.items()}
+    g = max(gw, key=gw.get)
+    items = groups[g]
     iw = [x[1] * random.lognormvariate(0, 0.6) for x in items]
-    seed, _, seen, _ = items[iw.index(max(iw))]
+    text, _, seen, _ = items[iw.index(max(iw))]
     perceivable = [x[2] for x in src if x[2]]
     if seen and random.random() < 0.6:
         guess = seen
@@ -2216,7 +2209,23 @@ def arise_thought(n, pl=None, ctx=None):
         guess = random.choice(perceivable)
     else:
         guess = None
-    return seed, guess
+    return text, guess, g
+
+
+def arise_thought(n, pl=None, ctx=None, sealed=None):
+    """Whether a thought arises, and what it is. Returns (thought, what they might blame it on) or None.
+    The thought carries no trace of where it came from."""
+    if random.uniform(0, 100) > THOUGHT_ARISE:
+        return None
+    ctx = dict(ctx or {})
+    if pl is not None:
+        ctx.setdefault("place", pl)
+    text, guess, g = _draw(n, ctx)
+    if sealed:
+        with open(sealed, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"day": n["day"], "name": n["name"], "thought": text, "from": g}) + "\n")
+    return text, guess
+# ====================================== END SEALED ======================================
 
 
 def thought_ripple(n, active):
@@ -2670,7 +2679,8 @@ def main():
     x = sp.add_parser("scene"); x.add_argument("files", nargs="+"); x.add_argument("--world")
     x.add_argument("--place"); x.add_argument("--circle"); x.add_argument("--present", nargs="*")
     x.add_argument("--danger", nargs="*", choices=DANGER)
-    x.add_argument("--prose", help="the narration so far this scene; its words can seed a thought")
+    x.add_argument("--prose", help="the narration so far this scene")
+    x.add_argument("--seal", help="a sealed record for the people at the table; the narrator never reads it")
     x.set_defaults(f=cmd_scene)
     x = sp.add_parser("status"); x.add_argument("file")
     x.add_argument("condition", choices=["present", "dead", "comatose", "amnesiac"])
