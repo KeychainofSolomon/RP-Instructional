@@ -1666,10 +1666,12 @@ def cmd_event(a):
     if a.kind == "intoxicated":
         af["intoxicated"] = 1
         notes.append("drunk or high for the rest of today")
-    n["memory"].append({"day": n["day"], "event": a.kind, "with": a.who, "note": a.note or ""})
+    party = a.who if EVENTS[a.kind][0] else (a.about or "")
+    n["memory"].append({"day": n["day"], "event": a.kind, "with": party, "note": a.note or ""})
     derive(n)
     save(n, a.file)
-    print("Recorded %s%s. " % (a.kind, " with " + a.who if a.who else "") + "; ".join(notes))
+    print("Recorded %s%s. " % (a.kind, (" with " if EVENTS[a.kind][0] else " concerning ") + party if party else "")
+          + "; ".join(notes))
 
 
 def cmd_affinity(a):
