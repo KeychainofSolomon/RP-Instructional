@@ -9,6 +9,7 @@
 6. Conflict: how opposition is pursued
 7. Receiving help
 8. Codes and compulsions
+9. Relationships and processing
 
 ## 1. Approaches
 
@@ -161,3 +162,21 @@ control rating of 6, 9, 12 or 15 (d4): how well they hold to the code, or hold o
 - **Codes** hold unless a Starved need with weight greater than control ÷ 4 directly
   conflicts with them. A code with control 15 never breaks that way. Breaking a code starves
   their Selfhood and is never forgotten.
+
+## 9. Relationships and processing
+
+Ties can name a specific person or thing and a **role**:
+`forge.py tie maren.json --to "Bram" --role sibling --loyalty 5`. Roles: child, parent, sibling,
+spouse, lover, kin, friend, dependant, student, mentor, spiritual, master, subordinate, follower,
+comrade, rival, enemy, creditor, debtor, symbol. Each maps to a class (beloved, charge, revered,
+authority, familiar, rival, enemy, conceptual). Kin and friends count as beloved at loyalty 4+.
+
+Relationships decide **violence responses** (violence.md) and **grief** (time.md): who was hurt
+or lost, and who did it, change everything. A tending type doesn't go to anyone wounded: they go
+to their own, and to strangers only if very warm or merciful.
+
+**Processing** is how a person takes what happens to them, worked out from their traits: Numb,
+Expressive, Devotional, Action, Contained, Caretaking, Intellectual, Bargaining (Hollow people
+perform). It shapes their response to violence, how grief shows ("keeps working; won't stop
+working", "talks as if it can still be undone", "looks after everyone else"), and when it
+arrives: the numb grieve late, after a few days of carrying on as if nothing happened.

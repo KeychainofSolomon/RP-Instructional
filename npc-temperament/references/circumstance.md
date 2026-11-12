@@ -44,7 +44,8 @@ Contradiction sides and circumstance colour carry tags too (section 4).
 | 4 | **enraged** | violence → Fury; Hostile with Volatility ≥ 2 and about-you ≤ −3 | warm, intimate, leisure, giving, sad (Protective allowed) | Protective / Dutiful / Righteous Wrath | Discipline ≥ 2: held very still, not loud |
 | 5 | **stunned** | violence → Shock | levity, display, leisure, dominant, action | Practical / Distracted / Cold Refusal | — |
 | 6 | **tending** | violence → Tending | levity, display, leisure, dominant, giving, intimate, formal, covert, petty, fear, rage | Protective / Distracted / Cold Refusal | — |
-| 7 | **grieving** | a loss (lasts 8–14 days) | levity, display, leisure; Fear-Aggression becomes Reproach or Grudge | Tender or Practical / Melancholic / Reproach or Grudge | gallows humour if they laugh at the wrong moments, or Energy and Openness ≥ 2 |
+| 6b | **protecting** | violence → Shield or Covering | levity, display, leisure, giving, intimate, sad | Protective / Wary / Territorial | — |
+| 7 | **grieving** | a loss (length by relationship; colour by processing style) | levity, display, leisure; Fear-Aggression becomes Reproach or Grudge | Tender or Practical / Melancholic / Reproach or Grudge | gallows humour if they laugh at the wrong moments, or Energy and Openness ≥ 2 |
 | 8 | **sick** | a day of falling sick (lasts 2–4 days) | display, levity, action | Practical / Distracted / Cold Refusal | — |
 | 9 | **exhausted** | a tired day, no rest | display, action, leisure | Practical / Distracted / Cold Refusal | — |
 | 10 | **intoxicated** | drink or drugs (rest of the day) | swaps: Dutiful→Distracted, Wary→Flirtatious or Melancholic, Cold Refusal→Mockery, Evasive→Confiding, Withdrawn→Melancholic, and more | — | exempt: Discipline ≥ 3 (very careful about every word) |

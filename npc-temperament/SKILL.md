@@ -26,6 +26,7 @@ References (read when needed):
 - `references/time.md` — memory, trust, slow change, tides.
 - `references/circumstance.md` — how hurt, fear, grief, drink, rank, ritual and more amend the
   way a person comes across; the amendment review required before adding anything.
+- `references/places.md` — place sheets: what is always there, and what violence leaves behind.
 - `references/violence.md` — registers, language, dissonance and responses for violent scenes.
 - `references/tables.md` — stations, offices, ties, codes, quirks, oddities, danger words.
 - `scripts/forge.py` — does all of this. Use it whenever code can run.
@@ -188,7 +189,11 @@ scene's Violence dial sets the **register**: Rupture (violence tears the ordinar
 in plain run-on sentences). One or two **dissonant beats** are rolled from the world (a cheerful
 tune still playing, someone finishing their meal) and placed without comment. Each person's
 **response** (tending, freezing, fury, business, curiosity, ritual…) is worked out from their
-traits. **Violence changes how people come across**: for the rest of that day their
+traits, **who was hurt and who did it** (a child, a priest, a rival, an enemy, a stranger, a
+symbol of their creed), and **how they process** what happens to them (some act, some freeze,
+some go numb and grieve later, some keep the old words, some refuse to believe it). Dissonance
+comes from the **place sheet**, what is always there, and the place keeps a mark afterwards.
+**Violence changes how people come across**: for the rest of that day their
 response replaces their usual manner, and most faces drop. The exceptions are people for whom
 violence is already ordinary: the businesslike, the curious-cold, the stoic, anyone with
 Volatility −2 or lower, and, where violence is everyday (Violence 3), anyone who isn't
@@ -283,7 +288,10 @@ python scripts/forge.py ask maren.json --touched
 python scripts/forge.py event maren.json betrayal --note "sold her out to the watch"
 python scripts/forge.py affinity maren.json bram.json --tie rival
 python scripts/forge.py scene maren.json bram.json
-python scripts/forge.py violence maren.json bram.json --hurt "Bram"
+python scripts/forge.py place yard.json --name "The yard" --add "sound:the pump" "animal:the geese"
+python scripts/forge.py tie maren.json --to "Bram" --role sibling --loyalty 5
+python scripts/forge.py violence maren.json bram.json --place yard.json --victim "Bram" --attacker player --hurt "Bram"
+python scripts/forge.py event maren.json loss --about "Bram"
 python scripts/forge.py tide world.json
 python scripts/forge.py styles
 ```

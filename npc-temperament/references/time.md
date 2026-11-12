@@ -50,7 +50,7 @@ states, and leaves **marks** toward slow change.
 | threat | −1 | Safety −1 | Volatility + |
 | lie-caught | −1 | — | Warmth − |
 | triumph | — | Selfhood +1 | Dominance +, Discipline + |
-| loss | — | Belonging −2 | Energy −, Volatility + |
+| loss (`--about` who) | — | Belonging −2; Meaning −2 for a mentor, spiritual guide or symbol | Energy −, Volatility + |
 | code-broken | — | Selfhood −2 | Candour − |
 
 ## 4. Slow change
@@ -82,7 +82,10 @@ continuity.
 
 ## 6. Lasting states
 
-Some states outlast the moment and are tracked on the ledger: grief (8–14 days after a loss),
+Some states outlast the moment and are tracked on the ledger: grief (its length set by who was
+lost: a child 22–35 days, a spouse or lover 15–28, a parent, sibling, dependant or spiritual
+guide 11–20, kin, friend, mentor or symbol 8–14, a comrade or superior a few days, a rival 1–4,
+an enemy none; the numb grieve 1–3 days late),
 sickness (2–4 days after falling ill), intoxication (the rest of the day), and being shaken by
 violence (the rest of that day). They tick down with each day roll and amend how the person
 comes across while they last (circumstance.md).

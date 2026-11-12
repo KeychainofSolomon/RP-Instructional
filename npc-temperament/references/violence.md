@@ -1,7 +1,7 @@
 # Violence
 
 How violent scenes are written. Read before narrating any scene with the `violence` or `injury`
-danger keywords. Script: `forge.py violence <files> --hurt "Name"`.
+danger keywords. Script: `forge.py violence <files> --place <place.json> --victim "Name" --attacker "Name" --hurt "Name"`.
 
 ## Contents
 1. Registers
@@ -44,42 +44,78 @@ The scene's Violence dial picks the register (Order and Deceit can push toward T
 
 ## 3. Dissonance
 
-Each violent scene rolls one or two dissonant beats: things in the world that don't stop or
-don't fit (a cheerful tune still playing, someone finishing their meal, the light on the wall
-being lovely, a kettle starting to whistle). Place them anywhere: before the act, inside it,
+Each violent scene draws one or two dissonant beats **from the place sheet** (places.md): the
+things that are always there, which keep going or don't fit (the prayer bell on time, the cats
+coming to look and losing interest, the morning light lovely on the wall). The least-used
+fixtures come first, so a long campaign doesn't repeat itself. A generic list is used only when
+a place has no sheet or too little on it. Place them anywhere: before the act, inside it,
 after it. **Never comment on them.** No "ironically", no "as if nothing had happened", no
 pointing at the contrast. The reader does that work. The dissonance carries the grit precisely
 because nothing explains it.
 
-An aftermath beat (flies, a bucket and brush, the meal going cold, nobody sitting in that chair)
-closes the scene or opens the next.
+An aftermath beat (flies, a bucket and brush, the meal going cold) closes the scene, and the
+place keeps a mark of it (flagstones scrubbed paler than the rest, a door that stays shut, a
+chair nobody uses). Marks join the place sheet and can return as dissonance in later scenes.
 
 ## 4. Responses
 
-Each person's response comes from their traits, not a roll:
+A response comes from four things: **who was hurt** (to this person), **who did it**, **how this
+person processes** what happens to them, and their nature. Nothing is rolled.
 
-| Response | Who | What it looks like |
-|---|---|---|
-| Wounded-Selfless | hurt, Warmth ≥ 2 | asks after someone else first |
-| Wounded-Panic | hurt, Volatility ≥ 2 | pleads, bargains, calls for someone; breath breaks words |
-| Wounded-Stoic | hurt, Volatility ≤ −2 | practical about their own wound; asks for cloth, water, light |
-| Wounded-Shock | hurt, otherwise | looks at the wound as if it's someone else's; says something ordinary |
-| Curiosity | a quarter or more Predator, or Warmth −3 and Volatility ≤ −2 | calm interest, studies it, may remark on it plainly |
-| Business | dominant Professional, Commanding or Schemer, or Discipline ≥ 2 and Volatility ≤ −1 | takes charge, courteous, soft words for hard things |
-| Tending | Warmth ≥ 2, Volatility ≤ 1 | goes to the wounded whatever the danger |
-| Ritual | Faith creed or Zealot/Devoted dominant, Energy ≤ 0, Volatility ≤ 1 | prayer, set words, old motions |
-| Fury | Volatility ≥ 2, Dominance ≥ 1 | loud, forward, wants to hit back now |
-| Freeze | Volatility ≥ 2, Energy ≤ −1 | doesn't move, holds what they were holding |
-| Flight | Volatility ≥ 2, otherwise | leaves by the nearest way |
-| Spectator | Energy ≤ −2 | watches, says nothing, misses nothing |
-| Shock | everyone else | keeps doing the ordinary thing a moment too long |
+**Relationship classes** (from their ties; set with `forge.py tie`):
 
-**Outward change.** For the rest of that in-world day, the response replaces the person's usual
-manner (their forms), and faces drop. It ends with the next day roll, though the memory and any
-trust change stay. **Unchanged:** Business, Curiosity and Wounded-Stoic responses; anyone with
-Volatility ≤ −2; and, at Violence 3, anyone with Volatility ≤ 0 who isn't hurt. Violence is
-already part of who they are, so the surface holds. A masked person with Discipline ≥ 2 and
-Volatility ≤ 0 who isn't hurt keeps the mask over the shaken manner, barely.
+| Class | Roles |
+|---|---|
+| beloved | child, parent, sibling, spouse, lover, dependant; kin or friend at loyalty 4+ |
+| charge | student, subordinate, follower at loyalty 3+ |
+| revered | mentor, spiritual guide |
+| conceptual | something that embodies what they hold highest: a cause, an object, a place, or anyone embodying their creed (`--symbol <creed>`) |
+| authority | master, commander, employer |
+| familiar | comrade, creditor, debtor; kin or friend below loyalty 4 |
+| rival · enemy · stranger | as named |
+
+**Processing** (from traits): Numb (Volatility ≥ 2, Energy ≤ −1), Expressive (Volatility ≥ 2),
+Devotional (Faith creed, or Zealot/Devoted, Volatility ≤ 1), Action (Dominance ≥ 2), Contained
+(Discipline ≥ 2), Caretaking (Warmth ≥ 2), Intellectual (Openness ≥ 2), Bargaining
+(Candour ≤ −1), otherwise Contained. Hollow people perform.
+
+**When someone close is hurt** (beloved, revered, charge), processing decides:
+
+| Processing | Response |
+|---|---|
+| Expressive | **Frantic**: frantic hands; says their name over and over |
+| Contained, Caretaking | **Tending**: goes to them; hands busy, voice low |
+| Numb | **Freeze**: does not move; holds whatever they were holding |
+| Action | **Shield**: puts their body between them and harm; faces the one who did it |
+| Devotional | **Vigil**: kneels by them and keeps the old words |
+| Intellectual | **Clinical**: presses, counts, gives short orders; the voice flat |
+| Bargaining | **Denial**: tells them to get up, that it's nothing |
+
+When **something they hold highest** is struck: Fury (Expressive, Action), Ritual (Devotional),
+Freeze (Numb), Denial (Bargaining), otherwise Shock.
+
+**Who did it** matters too. If someone close to them did it to someone who isn't: **Covering**
+(steps between the one who did it and everyone else) for the decisive, **Torn** (looks from one
+to the other) for the rest. If both are close to them: Torn. If their authority did it:
+**Obeys** (does what they're told; doesn't look at the body) for the disciplined and the meek.
+
+**Others**: their authority hurt → Shield for the sworn and loyal, Business for the businesslike.
+A rival hurt → **Conflicted** (starts forward, stops), Tending if very warm, Curiosity if
+predatory. An enemy hurt → Tending if very warm or merciful, **Satisfied** (watches to the end;
+doesn't move to help) if cold or sly, Spectator otherwise. A familiar hurt → Tending if warm and
+steady. A stranger hurt → their nature and creed: Curiosity (predatory, or Strength or Thrill
+creeds and calm), Business, Tending (warm or merciful), Fury (Justice creed, volatile and
+dominant), Ritual (faithful, quiet), Fury, Freeze or Flight (volatile), Spectator (withdrawn),
+otherwise Shock.
+
+**Wounded** themselves: Wounded-Betrayed (looks at the one who did it; asks why) if someone close
+did it; otherwise Selfless, Panic, Stoic or Shock by nature.
+
+**Outward change.** For the rest of that day the response puts them in a circumstance
+(circumstance.md): tending, protecting, enraged, frozen, afraid, stunned, solemn or under a
+superior. **Unchanged** only for Business, Curiosity, Spectator, Satisfied and Performed, and at
+Violence 3 for the calm who merely look on. **Never unchanged when someone close to them is
+involved**, except for the hollow.
 
 These combine with mood and stratagem (interaction.md): a Fury response with an "avoid battle"
 stratagem shouts and does not charge; a Business response with "overwhelm" is very polite and

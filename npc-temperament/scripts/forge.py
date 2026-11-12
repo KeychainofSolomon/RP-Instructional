@@ -747,7 +747,10 @@ def cmd_day(a):
         "yes" if open_today else "no", " (the day touched it)" if opened else " (d10=%d vs %d)" % (
             oroll, n["derived"]["openness_target"])))
     if af:
-        print("Lasting states: " + ", ".join("%s (%d more day%s)" % (k, v, "" if v == 1 else "s") for k, v in af.items()))
+        shown = {k: v for k, v in af.items() if k not in ("grief_delay", "grief_pending")}
+        if af.get("grief_delay"):
+            shown["grief yet to come, in"] = af["grief_delay"]
+        print("Lasting states: " + ", ".join("%s (%d more day%s)" % (k, v, "" if v == 1 else "s") for k, v in shown.items()))
     if trailing:
         print("Speech today: trailing off now and then (%s). A few ellipses across the scene, not every line."
               % trailing)
@@ -1686,7 +1689,7 @@ PLACE_KINDS = {  # how a place's own fixtures turn dissonant
  "smell": ["{x} is still in the air", "{x} cuts through everything"],
  "person": ["{x} keeps at what they were doing", "{x} looks up, then back down"],
  "weather": ["{x} goes on outside", "{x} doesn't care"],
- "mark": ["{x}, still", "someone has set something down over {x}"],
+ "mark": ["{x}, still", "{x}; nobody mentions it"],
 }
 AFTERMATH = [  # (what happens now, what the place keeps)
  ("the blood goes dark and dull faster than expected", "a stain that won't scrub out"),
