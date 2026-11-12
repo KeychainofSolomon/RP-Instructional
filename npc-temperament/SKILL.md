@@ -26,6 +26,8 @@ References (read when needed):
 - `references/time.md` — memory, trust, slow change, tides.
 - `references/circumstance.md` — how hurt, fear, grief, drink, rank, ritual and more amend the
   way a person comes across; the amendment review required before adding anything.
+- `references/affect.md` — pain, elation and clarity; getting used to things; inclinations and
+  habits; how traits change against the anchor of who someone is.
 - `references/places.md` — place sheets: what is always there, and what violence leaves behind.
 - `references/violence.md` — registers, language, dissonance and responses for violent scenes.
 - `references/tables.md` — stations, offices, ties, codes, quirks, oddities, danger words.
@@ -217,11 +219,18 @@ All rolled upstream (before the scene or when a character is created), never as 
 
 A character on the scene **always remembers who they are and everything they've lived through
 with others**, unless they are dead, comatose, or have amnesia (or a similar state) by an
-established cause. The ledger is canon. Feelings fade; memories don't: small trust shifts fade
-after a week, big ones are permanent, and the event itself stays remembered either way.
-Characters change slowly: three marks in the same direction (betrayals, triumphs, losses) shift
-a trait by one step, at most once a month per trait. Three weeks of starving a need makes it
-matter more. A self starved long enough can harden into a mask. See time.md.
+established cause. The ledger is canon. Feelings fade; memories don't.
+
+What happens to them is felt as **pain or elation**, scaled by how close they are to whoever it
+concerns, how sensitive they are and how used to it they've become, and split by how they
+process it (the numb feel it late, the contained bottle it). Familiarity dulls repeated pain and
+repeated joy, and loosens again with time. **Clarity**, a lucid neutrality, can strike only where
+different kinds of moments converge and pain and elation nearly cancel; the disciplined and calm
+have a wider margin for it, and those who find it grow toward it. **Inclinations** form from
+whatever someone keeps doing, filling quiet moments as habit and, if strong, becoming
+compulsion. Traits change only when the pressure of all this outweighs the anchor of their
+underlying nature; a change held long enough becomes part of who they are. Nothing holds
+forever. See affect.md and time.md.
 
 ## Guards against fringe cases
 
@@ -282,6 +291,8 @@ python scripts/forge.py circle --name "Shipwrights" --members maren.json bram.js
 python scripts/forge.py day maren.json --circle guild.json --world world.json
 python scripts/forge.py meet maren.json --approach patience --creed aligned --danger violence
 python scripts/forge.py meet maren.json --hurt --audience --superior --grieving --drunk --private
+python scripts/forge.py event maren.json reunion --about "Bram"
+python scripts/forge.py habit maren.json praying
 python scripts/forge.py audit
 python scripts/forge.py meet maren.json --opposed --their-strength 3 --ground 1
 python scripts/forge.py ask maren.json --touched

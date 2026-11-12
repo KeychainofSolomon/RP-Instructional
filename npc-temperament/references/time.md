@@ -37,9 +37,10 @@ when it matters.
 ## 3. Events that mark people
 
 Record significant events (script: `event`). Each changes trust (with the other party), need
-states, and leaves **marks** toward slow change.
+states, and is felt as pain or elation that presses on who they are (affect.md). The last
+column shows which traits it presses on.
 
-| Event | Trust | Needs | Marks |
+| Event | Trust | Needs | Presses on |
 |---|---|---|---|
 | kindness | +1 | Belonging +1 | Warmth + |
 | rescue | +2 | Safety +1 | Warmth +, Candour + |
@@ -52,13 +53,20 @@ states, and leaves **marks** toward slow change.
 | triumph | — | Selfhood +1 | Dominance +, Discipline + |
 | loss (`--about` who) | — | Belonging −2; Meaning −2 for a mentor, spiritual guide or symbol | Energy −, Volatility + |
 | code-broken | — | Selfhood −2 | Candour − |
+| reunion | +1 | Belonging +2 | Warmth +, Energy + |
+| joy | — | Comfort +1 | Energy +, Openness + |
+| witnessed (violence) | — | Safety −1 | Volatility + |
+| fell-ill, intoxicated | — | Survival −1 / Comfort +1 | — |
 
 ## 4. Slow change
 
 People change, but slowly and for reasons.
-- **Traits**: three marks in the same direction on the same axis shift it by one step. Each
-  axis can shift at most once per 30 in-world days. Everything derived from it (guard, fuse,
-  approach scores) moves with it.
+- **Traits**: pain, elation and repetition build pressure on traits; a trait moves one step when
+  the pressure outweighs the anchor of their underlying nature, at most once a month, or at once
+  for an overwhelming moment. Opposite pushes cancel; pressure eases; cores follow a change held
+  long enough (affect.md). Everything derived from a trait (guard, fuse, approach scores) moves
+  with it.
+- **Habits**: what they keep doing, they become inclined to do, up to compulsion (affect.md).
 - **Needs**: a rung Starved for 21 days in a row gains +1 weight. It has become a wound or an
   obsession.
 - **Authenticity**: Selfhood Starved for 21 days has a 1 in 3 chance of moving them one step

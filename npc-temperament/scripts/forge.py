@@ -111,6 +111,9 @@ STYLES = [
    ["Cold Refusal", "Obstruction", "Predatory", "Suspicion"], (0, "Practical"), 2, "PD"),
 ]
 SBY = {s["name"]: s for s in STYLES}
+KIND_FORMS = sorted({f for t in STYLES for f in t["kind"]})
+MIDDLE_FORMS = sorted({f for t in STYLES for f in t["mid"]})
+HOSTILE_FORMS = sorted({f for t in STYLES for f in t["host"]})
 FACES = ["Benevolent", "Devoted", "Conscientious", "Professional", "Self-Assured", "Dramatic"]
 INVERTERS = ("Zealot", "Self-Sacrificing", "Predator")
 
@@ -238,6 +241,9 @@ EVENTS = {  # trust sign, default size, marks [(axis, +-1)], need effects {rung:
  "code-broken": (0, 0, [(C, -1)], {"Selfhood": -2}),
  "fell-ill": (0, 0, [], {"Survival": -1}),
  "intoxicated": (0, 0, [], {"Comfort": 1}),
+ "reunion": (1, 1, [(W, 1), (E, 1)], {"Belonging": 2}),
+ "joy": (0, 0, [(E, 1), (O, 1)], {"Comfort": 1}),
+ "witnessed": (0, 0, [(V, 1)], {"Safety": -1}),
 }
 STRATAGEMS = [(3, "Overwhelm: confront openly, or toy with them"), (1, "Press: demand terms, show strength"),
               (0, "Wait and probe: test them, seek allies, feint"),
@@ -720,6 +726,9 @@ def cmd_day(a):
                 notes.append(drift_authenticity(n, -1))
         if x == "Selfhood" and n["sated_days"][x] == 21:
             notes.append(drift_authenticity(n, 1))
+    notes += affect_day(n)
+    notes += incline_day(n)
+    notes += clarity_check(n)
     if n["day"] % 7 == 0:
         for who, t in n["trust"].items():
             if t["surface"]:
@@ -887,6 +896,10 @@ CIRC = {
                speech=("trailing", "flow"),
                slip=2, voices=("Serious", "Mercurial", "Self-Sacrificing", "Devoted"),
                approach={"humour": -2, "haggling": -2, "flattery": -1, "pressure": -1, "patience": 1}),
+ "clear": R(itag={"plain"}, block={"fear", "rage", "petty", "display"},
+            repl={"Kind": "Candid", "Middle": "Curious", "Hostile": "Cold Refusal"},
+            inflect="unusually clear and unhurried; sees what's in front of them",
+            speech=("plain and unhurried", "flow"), slip=1, approach={"pressure": -1, "bluntness": 1}),
  "sick": R(itag={"plain"}, block={"display", "levity", "action"},
            repl={"Kind": "Practical", "Middle": "Distracted", "Hostile": "Cold Refusal"},
            inflect="pale, slow, short of breath", speech=("short", "flow"), slip=1,
@@ -937,7 +950,7 @@ CIRC = {
                  "Bargaining-Humour": lambda n: "Transactional" if _ax(n, D) >= 1 else None},
            inflect="one eye on the post", speech=("procedural", "register"), approach={"principle": 1, "haggling": -1}),
 }
-CONDS = ["hurt", "frozen", "afraid", "enraged", "stunned", "tending", "protecting", "grieving", "sick", "exhausted",
+CONDS = ["hurt", "frozen", "afraid", "enraged", "stunned", "tending", "protecting", "grieving", "clear", "sick", "exhausted",
          "intoxicated", "starving", "solemn", "festive", "superior", "intimate", "public", "duty"]
 STRESS = {"hurt", "frozen", "afraid", "enraged", "stunned", "tending", "protecting", "grieving", "solemn", "superior"}
 QUIRK_KIND = {
@@ -1057,6 +1070,7 @@ def conditions_for(n, a, band, about_you, plan):
     for k in ("grieving", "sick", "intoxicated", "exhausted"):
         if af.get(k): c.add(k)
     if td.get("trailing") == "tired": c.add("exhausted")
+    if n.get("affect", {}).get("clarity_days"): c.add("clear")
     if n["needs"]["state"]["Survival"] == -2 and "sick" not in c: c.add("starving")
     if any(n["scars"].get(x, {}).get("dir") == -1 for x in (a.danger or [])): c.add("afraid")
     if plan and plan.startswith("Yield"): c.add("afraid")
@@ -1169,7 +1183,8 @@ def cmd_meet(a):
             ap += CIRC[c].get("approach", {}).get(a.approach, 0)
     ap = clamp(ap, -2, 2)
     about_you = trust + ap + creed + social + cont + dang
-    about_them = td["mood"] + chronic(n)
+    feel = clamp(int(round(n.get("affect", {}).get("feeling", 0) / 2)), -3, 3)
+    about_them = td["mood"] + chronic(n) + feel
     mood = dv["baseline"] + about_them + about_you
     capped = ""
     if mood <= dv["fuse"] and not (about_you <= -1 or dv["displacer"]):
@@ -1207,6 +1222,10 @@ def cmd_meet(a):
     key = tetrad_key(band)
     use_alt = abs(about_them) > abs(about_you)
     raw = shown[key][1 if use_alt else 0]
+    habit_note = None
+    hf = habit_form(n, key, active)
+    if hf and hf != raw and abs(about_you) <= 2 and abs(about_them) <= 2:
+        raw, habit_note = hf, "out of habit"
     form, soft, ok, yielded = resolve(raw, key, active, n)
     infl, sp, dropped_col = colour_for(n, active, td["side"])
     rs = td.get("shaken")
@@ -1217,6 +1236,12 @@ def cmd_meet(a):
     side_note = infl.pop() if (infl and SIDE_TEXT.get(n["contradiction"]["pair"]) and
                                infl[-1] in [x[0] for x in SIDE_TEXT[n["contradiction"]["pair"]]]) else None
     infl += soft + exempt_notes
+    if habit_note and form == raw:
+        infl.append(habit_note)
+    pull = max(((k, r["strength"]) for k, r in n.get("inclinations", {}).items()
+                if k in FORM_TAGS and 0.3 <= r["strength"] < 0.5 and k != form), key=lambda kv: kv[1], default=None)
+    if pull and all(_passes(pull[0], c, n) for c in active):
+        infl.append("a pull toward " + pull[0])
     others = sorted([v for v in n["voices"] if v["style"] != vstyle], key=lambda v: -v["frac"])
     if others and others[0]["frac"] >= 0.25:
         tf = resolve(others[0]["manner"][key][0], key, active, n)[0]
@@ -1224,11 +1249,15 @@ def cmd_meet(a):
             infl.append("with a trace of " + tf)
     if side_note:
         infl.append(side_note)
+    fw = feeling_words(n.get("affect", {}).get("feeling", 0))
+    if fw and "clear" not in active and not ({"hurt", "frozen"} & set(active)):
+        infl.append(fw)
     tint = {"Cool": "colder ", "Warm": "warmer "}.get(band, "")
     print("[narrator only] %s toward %s" % (n["name"], a.who))
-    print("Mood %+d = baseline %+d, their day %+d (%s), chronic %+d, trust %+d, approach %+d, creed %+d, "
-          "social %+d, contagion %+d, danger %+d%s" % (mood, dv["baseline"], td["mood"], td["cause"], chronic(n),
-                                                      trust, ap, creed, social, cont, dang, capped))
+    print("Mood %+d = baseline %+d, their day %+d (%s), chronic %+d, feeling %+d, trust %+d, approach %+d, "
+          "creed %+d, social %+d, contagion %+d, danger %+d%s" % (mood, dv["baseline"], td["mood"], td["cause"],
+                                                                 chronic(n), feel, trust, ap, creed, social, cont,
+                                                                 dang, capped))
     if active:
         print("Circumstances: " + ", ".join(active))
     print("Band: %s%s -> shows as %s%s%s" % (intensity(mood, band, n), band, tint if form == raw else "",
@@ -1241,6 +1270,11 @@ def cmd_meet(a):
         print("WARNING: circumstances could not settle on a form; run `audit`.")
     if vstyle != td["voice"]:
         print("The circumstance calls their %s side forward." % vstyle)
+    if form in FORM_TAGS and not form.startswith("Wounded") and not a.dry_run:
+        axes_ = [ax for tg in FORM_TAGS[form] for ax in TAG_AXES.get(tg, [])]
+        for note in incline(n, form, axes_):
+            print("Inclination: " + note)
+        save(n, a.file)
     if face_on:
         core = resolve(voice["manner"][key][1 if use_alt else 0], key, active, n)[0]
         print("Core underneath: %s (%s; slip threshold now %d). Only at or after a deception."
@@ -1386,6 +1420,107 @@ def cmd_audit(a):
                     txt, tg = SIDE_TEXT[pair][0 if side == "A" else 1]
                     if txt in notes and _blocked_by(tg, active, n):
                         problems.append("contradiction colour '%s' kept under %s" % (txt, ",".join(combo)))
+    for k in EVENTS:
+        if k not in EVENT_AFFECT: problems.append("event without affect: " + k)
+    for k in PROCESSING:
+        if k not in PROCESS_SPLIT: problems.append("processing without a split: " + k)
+    random.seed(1)
+    probe = build(list(DEFAULT_DIALS))
+    probe["axes"] = [0, 0, 0, 0, 0, 0, 0]; probe["core"] = [0] * 7; probe["flags"]["complete"] = False
+    probe["authenticity"]["kind"] = "Genuine"; derive(probe)
+    seen = []
+    for _ in range(6):
+        seen.append(intensity_of(probe, "betrayal", "familiar")[1])
+        affect(probe)["habit"]["betrayal"] = min(0.9, affect(probe)["habit"].get("betrayal", 0) + 0.15)
+    if not all(x > y for x, y in zip(seen, seen[1:])):
+        problems.append("habituation does not lessen repeated pain")
+    h0 = affect(probe)["habit"]["betrayal"]
+    for _ in range(30): affect_day(probe)
+    if affect(probe)["habit"].get("betrayal", 0) >= h0:
+        problems.append("habituation never fades")
+    probe["axes"] = [0, 0, 0, 3, 0, 0, 0]; probe["core"] = [0, 0, 0, 3, 0, 0, 0]
+    affect(probe)["pressure"] = [0.0] * 7; probe["shifts"] = {}
+    affect(probe)["pressure"][W] = -3.0
+    settle_traits(probe)
+    if probe["axes"][W] != 3:
+        problems.append("a moderate push moved a deeply rooted trait")
+    affect(probe)["pressure"][W] = -40.0
+    settle_traits(probe, overwhelming=40)
+    if probe["axes"][W] != 2:
+        problems.append("an overwhelming event moved a trait more or less than one step")
+    probe["axes"][W] = 2; probe["core"][W] = 3
+    for _ in range(CORE_DRIFT_DAYS + 1): affect_day(probe)
+    if probe["core"][W] != 2:
+        problems.append("a long-held change never became part of who they are")
+    for f_, tg in FORM_TAGS.items():
+        for t_ in tg:
+            if t_ not in TAG_AXES: problems.append("tag without inclination axes: " + t_)
+    random.seed(2)
+    q = build(list(DEFAULT_DIALS)); q["shifts"] = {}
+    steps = []
+    for _ in range(8):
+        b4 = q.get("inclinations", {}).get("Mockery", {}).get("strength", 0)
+        incline(q, "Mockery", [(W, -1)])
+        steps.append(q["inclinations"]["Mockery"]["strength"] - b4)
+    if not all(x > y for x, y in zip(steps, steps[1:])):
+        problems.append("inclinations do not grow by less each time")
+    s0 = q["inclinations"]["Mockery"]["strength"]
+    for _ in range(10):
+        q["day"] += 1; incline_day(q)
+    if q.get("inclinations", {}).get("Mockery", {}).get("strength", 0) >= s0:
+        problems.append("inclinations never fade")
+    for _ in range(30): incline(q, "drinking", ACT_AXES["drinking"])
+    if sum(1 for c in q["compulsions"] if c.get("from_habit") == "drinking") != 1:
+        problems.append("a strong habit did not become exactly one compulsion")
+    q["inclinations"]["Mockery"] = {"strength": 0.9, "count": 50, "last": q["day"]}
+    for combo in combos:
+        active, _ = circ_active(q, set(combo))
+        hf = habit_form(q, "Hostile", active)
+        if hf and not all(_passes(hf, c, q) for c in active):
+            problems.append("a habit broke through a circumstance: %s under %s" % (hf, ",".join(combo)))
+    def clar_probe(seed):
+        random.seed(seed)
+        c = build(list(DEFAULT_DIALS)); c["axes"] = [0] * 7; c["core"] = [0] * 7
+        c["authenticity"]["kind"] = "Genuine"; c.pop("affect", None); c["inclinations"] = {}; derive(c)
+        return c
+    c = clar_probe(3); flood = 0
+    for day_ in range(200):
+        c["day"] += 1; affect_day(c)
+        apply_affect(c, "betrayal", "familiar", EVENTS["betrayal"][2])
+        flood += bool(clarity_check(c))
+    if flood:
+        problems.append("clarity struck from one kind of moment repeated, without convergence")
+    c = clar_probe(4); lop = 0
+    for day_ in range(200):
+        c["day"] += 1; affect_day(c)
+        for k in ("betrayal", "loss", "humiliation"):
+            apply_affect(c, k, "familiar", EVENTS[k][2])
+        lop += bool(clarity_check(c))
+    if lop:
+        problems.append("clarity struck in pure pain, far from balance")
+    hits = 0; days_ = 0
+    for seed in range(40):
+        c = clar_probe(100 + seed)
+        for day_ in range(30):
+            c["day"] += 1; affect_day(c)
+            for k in ("betrayal", "reunion", "threat", "joy"):
+                apply_affect(c, k, "familiar", EVENTS[k][2])
+            onset = (clarity_window(c)[0] and not affect(c).get("converged") and not affect(c)["clarity_days"]
+                     and affect(c).get("apart", 99) >= CLARITY_WINDOW)
+            days_ += onset
+            hits += bool(clarity_check(c))
+    rate = 100.0 * hits / max(1, days_)
+    if days_ == 0 or not (1.0 <= rate <= 20.0):
+        problems.append("clarity per convergence outside its margin: %.1f%% (%d convergences)" % (rate, days_))
+    c = clar_probe(5)
+    base = clarity_chance(c)
+    c["inclinations"]["clarity"] = {"strength": 0.8, "count": 10, "last": c["day"]}
+    if clarity_chance(c) <= base:
+        problems.append("an inclination toward clarity does not make it likelier")
+    m0 = clarity_margin(clar_probe(6))
+    c = clar_probe(6); c["axes"][D] = 3; c["axes"][V] = -2
+    if clarity_margin(c) <= m0:
+        problems.append("discipline and calm do not widen the margin for clarity")
     uniq = list(dict.fromkeys(problems))
     groups = {}
     for u in uniq:
@@ -1461,16 +1596,11 @@ def cmd_event(a):
     st = n["needs"]["state"]
     for r, step in needs.items():
         st[r] = clamp(st[r] + step, -2, 1)
-    for axis, s in marks:
-        key = "%s%+d" % (AX[axis], s)
-        n["marks"][key] = n["marks"].get(key, 0) + 1
-        if n["marks"][key] >= 3:
-            last = n["shifts"].get(AX[axis], -999)
-            if n["day"] - last >= 30 and clamp(n["axes"][axis] + s, -3, 3) != n["axes"][axis]:
-                n["axes"][axis] = clamp(n["axes"][axis] + s, -3, 3)
-                n["shifts"][AX[axis]] = n["day"]
-                n["marks"][key] = 0
-                notes.append("slow change: %s shifts %+d (now %+d)" % (AX[axis], s, n["axes"][axis]))
+    cls = relation_to(n, a.about)[0] if a.about else (relation_to(n, a.who)[0] if a.who else "stranger")
+    if a.kind == "loss" and cls == "enemy":
+        pass
+    else:
+        notes += apply_affect(n, a.kind, cls, marks, a.size)
     if a.kind == "code-broken":
         notes.append("shame: Selfhood starved; they will not forget doing it")
     af = n.setdefault("afflictions", {})
@@ -1577,6 +1707,307 @@ def cmd_status(a):
     if a.condition == "dead":
         msg += ". Record a loss event for each person tied to them."
     print(msg)
+
+# ---------- affect: pain, elation, clarity; habituation; trait pressure against anchors ----------
+# kind: (valence, base intensity, category for habituation)
+EVENT_AFFECT = {
+ "kindness": (1, 2, "kindness"), "rescue": (1, 6, "rescue"), "gift": (1, 2, "gifts"),
+ "respect": (1, 2, "praise"), "betrayal": (-1, 6, "betrayal"), "humiliation": (-1, 4, "humiliation"),
+ "threat": (-1, 3, "threat"), "lie-caught": (-1, 2, "betrayal"), "triumph": (1, 4, "success"),
+ "loss": (-1, 5, "loss"), "code-broken": (-1, 5, "shame"), "fell-ill": (-1, 2, "illness"),
+ "intoxicated": (1, 1, "pleasure"), "reunion": (1, 5, "reunion"), "joy": (1, 3, "pleasure"),
+ "witnessed": (-1, 3, "violence"),
+}
+CLOSENESS = {"stranger": 0.5, "familiar": 1.0, "rival": 1.0, "enemy": 0.6, "authority": 1.2, "charge": 1.5,
+             "conceptual": 1.5, "revered": 1.8, "beloved": 2.0}
+# how processing splits an experience: (felt now, pressure on who they are, delayed portion)
+PROCESS_SPLIT = {"Expressive": (1.3, 0.7, 0.0), "Contained": (0.6, 1.3, 0.0), "Numb": (0.2, 1.0, 0.8),
+                 "Devotional": (0.9, 0.8, 0.0), "Intellectual": (0.7, 0.7, 0.0), "Action": (1.0, 0.9, 0.0),
+                 "Caretaking": (1.0, 1.0, 0.0), "Bargaining": (0.8, 0.9, 0.4), "Performed": (0.0, 0.3, 0.0)}
+CORE_DRIFT_DAYS = 90
+CLARITY_WINDOW = 7       # days of recent moments that can converge
+CLARITY_KINDS = 3        # different kinds of moment needed
+CLARITY_WEIGHT = 8.0     # how much they must amount to, pain and elation together
+CLARITY_MARGIN = 5.0     # how near to balance pain and elation must sit
+CLARITY_CHANCE = 5       # percent a day while converged, before inclination
+PRESSURE_GAIN = 0.3   # how much of an experience presses on who they are; most of it passes
+
+
+def affect(n):
+    a = n.setdefault("affect", {})
+    a.setdefault("feeling", 0.0)       # pain (-) / elation (+), fades by half each day
+    a.setdefault("pending", [])        # [days until it arrives, amount] for the numb and the bargaining
+    a.setdefault("habit", {})          # category -> 0..0.9: how used to it they are
+    a.setdefault("pressure", [0.0] * 7)
+    a.setdefault("clarity_days", 0)
+    a.setdefault("clarity_count", 0)
+    a.setdefault("away", [0] * 7)      # days each trait has sat away from its core
+    if "core" not in n:
+        n["core"] = list(n["axes"])    # who they were when they came on the scene
+    return a
+
+
+def anchor(n, i, direction):
+    """How strongly their underlying nature holds a trait against change in this direction."""
+    core = n["core"][i]
+    cur = n["axes"][i]
+    base = 3.0 + 0.5 * abs(core)
+    if n["axes"][D] >= 2: base += 1.0
+    if n["flags"].get("complete"): base += 1.0
+    toward_core = (core - cur) * direction > 0
+    return base * (0.5 if toward_core else 1.0 + 0.5 * abs(cur - core))
+
+
+def intensity_of(n, kind, cls, size=None):
+    """Effective intensity after closeness, sensitivity and habituation."""
+    val, base, cat = EVENT_AFFECT[kind]
+    if size == 2: base *= 1.5
+    sens = 1.0 + n["axes"][V] / 3.0
+    h = affect(n)["habit"].get(cat, 0.0)
+    return val, base * CLOSENESS.get(cls, 1.0) * max(0.2, sens) * (1.0 - h), cat, h
+
+
+def apply_affect(n, kind, cls, marks, size=None):
+    """Feel an event: feeling now, delayed feeling, pressure on traits, habituation, maybe clarity.
+    Returns notes for the narrator."""
+    af = affect(n)
+    notes = []
+    val, eff, cat, h = intensity_of(n, kind, cls, size)
+    proc = processing(n)
+    now_k, press_k, later_k = PROCESS_SPLIT[proc]
+    af["feeling"] = clamp(af["feeling"] + val * eff * now_k, -10, 10)
+    af.setdefault("recent", []).append([n["day"], cat, round(val * eff, 2)])
+    if later_k:
+        af["pending"].append([d(3), val * eff * later_k])
+    for axis, sgn in marks:
+        af["pressure"][axis] += sgn * eff * press_k * PRESSURE_GAIN
+    step = 0.15 * (0.5 if n["axes"][V] >= 2 else 1.5 if n["axes"][V] <= -2 else 1.0)
+    af["habit"][cat] = min(0.9, h + step)
+    if h >= 0.3:
+        notes.append("they are used to %s now; it lands at %d%% of what it once did" % (cat, round(100 * (1 - h))))
+    notes.append("%s %.1f (%s)" % ("pain" if val < 0 else "elation", eff, proc.lower()))
+    notes += settle_traits(n, overwhelming=eff)
+    return notes
+
+
+def settle_traits(n, overwhelming=0.0):
+    """Turn trait pressure into change where it outweighs the anchor of their underlying nature."""
+    af = affect(n)
+    notes = []
+    for i in range(7):
+        p = af["pressure"][i]
+        if abs(p) < 0.01:
+            continue
+        sgn = 1 if p > 0 else -1
+        anc = anchor(n, i, sgn)
+        new = clamp(n["axes"][i] + sgn, -3, 3)
+        if new == n["axes"][i]:
+            af["pressure"][i] = sgn * min(abs(p), anc)
+            continue
+        last = n["shifts"].get(AX[i], -999)
+        big = overwhelming >= 2 * anc
+        if abs(p) > anc and (n["day"] - last >= 30 or big):
+            n["axes"][i] = new
+            n["shifts"][AX[i]] = n["day"]
+            af["pressure"][i] = p - sgn * anc
+            notes.append("%s shifts %+d (now %+d)%s" % (AX[i], sgn, new, ", all at once" if big and n["day"] - last < 30 else ""))
+    if notes:
+        derive(n)
+    return notes
+
+
+def affect_day(n):
+    """Everything arises and changes: feeling fades, habits loosen, pressure eases, cores follow."""
+    af = affect(n)
+    notes = []
+    af["feeling"] = round(af["feeling"] * 0.5, 2) if abs(af["feeling"]) >= 0.5 else 0.0
+    arrived = 0.0
+    keep = []
+    for item in af["pending"]:
+        item[0] -= 1
+        if item[0] <= 0:
+            arrived += item[1]
+        else:
+            keep.append(item)
+    af["pending"] = keep
+    if arrived:
+        af["feeling"] = clamp(af["feeling"] + arrived, -10, 10)
+        notes.append("what they didn't feel at the time arrives now (%+.1f)" % arrived)
+    for k in list(af["habit"]):
+        af["habit"][k] = round(max(0.0, af["habit"][k] - 0.02), 3)
+        if af["habit"][k] == 0:
+            del af["habit"][k]
+    af["pressure"] = [round(x * 0.98, 3) for x in af["pressure"]]
+    if af["clarity_days"]:
+        af["clarity_days"] -= 1
+    for i in range(7):
+        if n["axes"][i] != n["core"][i]:
+            af["away"][i] += 1
+            if af["away"][i] >= CORE_DRIFT_DAYS:
+                n["core"][i] += 1 if n["axes"][i] > n["core"][i] else -1
+                af["away"][i] = 0
+                notes.append("%s has become part of who they are (core now %+d)" % (AX[i], n["core"][i]))
+        else:
+            af["away"][i] = 0
+    return notes
+
+
+def clarity_margin(n):
+    """How near to balance is near enough. Widens as discipline, calm and a leaning toward clarity grow."""
+    a = n["axes"]
+    inc = n.get("inclinations", {}).get("clarity", {}).get("strength", 0.0)
+    return CLARITY_MARGIN + max(0, a[D]) + max(0, -a[V]) + 3.0 * inc
+
+
+def clarity_window(n):
+    """(converged?, kinds, weight, net) over the recent window."""
+    af = affect(n)
+    span = CLARITY_WINDOW + (2 if n["axes"][D] >= 2 else 0)
+    recent = [r for r in af.get("recent", []) if n["day"] - r[0] < span]
+    af["recent"] = recent
+    kinds = len({r[1] for r in recent})
+    weight = sum(abs(r[2]) for r in recent)
+    net = sum(r[2] for r in recent)
+    need = CLARITY_WEIGHT * max(0.4, 1.0 + n["axes"][V] / 3.0)   # calm people feel less, so need less
+    return (kinds >= CLARITY_KINDS and weight >= need and abs(net) <= clarity_margin(n),
+            kinds, weight, net)
+
+
+def clarity_chance(n):
+    a = n["axes"]
+    inc = n.get("inclinations", {}).get("clarity", {}).get("strength", 0.0)
+    pct = CLARITY_CHANCE + 5 * inc + (2 if a[D] >= 2 else 0) + (1 if a[V] <= -1 else 0) - (2 if a[V] >= 2 else 0)
+    return max(1.0, pct)
+
+
+def clarity_check(n):
+    """Clarity strikes only where different moments converge and pain and elation nearly cancel."""
+    af = affect(n)
+    ok, kinds, weight, net = clarity_window(n)
+    span = CLARITY_WINDOW + (2 if n["axes"][D] >= 2 else 0)
+    if not ok:
+        af["apart"] = af.get("apart", span) + 1
+        af["converged"] = False
+        return []
+    fresh = not af.get("converged", False) and af.get("apart", span) >= span
+    af["converged"] = True
+    af["apart"] = 0
+    if not fresh or af["clarity_days"]:
+        return []          # one chance per genuine convergence: the moments must have been apart a while
+    if random.uniform(0, 100) > clarity_chance(n):
+        return []
+    rarity = 1.0 / (1 + af["clarity_count"])
+    prof = rarity * (1.5 if n["axes"][V] >= 1 else 1.0)
+    af["clarity_count"] += 1
+    af["clarity_days"] = 1 + d(3)
+    af["feeling"] = 0.0
+    for r in af["recent"]:
+        af["habit"][r[1]] = min(0.9, af["habit"].get(r[1], 0.0) + 0.2)
+    af["pressure"][V] -= 2.0 * prof
+    af["pressure"][O] += 1.5 * prof
+    af["pressure"][D] += 1.0 * prof
+    af["recent"] = []
+    notes = ["clarity: %d kinds of moment converged, pain and elation nearly even (%+.1f); unusually clear "
+             "and unhurried for %d days%s" % (kinds, net, af["clarity_days"],
+                                               "; rare for them, and it leaves a trace" if prof >= 1 else "")]
+    notes += incline(n, "clarity", [(D, 1), (V, -1)])
+    return notes
+
+
+def feeling_words(f):
+    if f <= -6: return "heavy; everything costs effort"
+    if f <= -3: return "weighed down"
+    if f >= 6: return "bright, a little reckless"
+    if f >= 3: return "lighter than usual"
+    return ""
+
+
+# ---------- inclinations: what is repeated becomes easier, then wanted ----------
+TAG_AXES = {  # what showing a manner, again and again, presses on
+ "levity": [(E, 1)], "display": [(E, 1)], "dominant": [(M, 1)], "warm": [(W, 1)], "intimate": [(W, 1)],
+ "giving": [(W, 1)], "cold": [(W, -1)], "action": [(E, 1)], "rage": [(V, 1)], "fear": [(V, 1)],
+ "guarded": [(E, -1)], "formal": [(D, 1)], "covert": [(C, -1)], "petty": [(C, -1)], "sad": [(E, -1)],
+ "leisure": [(O, 1)], "plain": [], "wounded": [],
+}
+ACT_AXES = {  # common repeated acts; anything else still forms an inclination, without pressing a trait
+ "drinking": [(D, -1)], "gambling": [(D, -1), (O, 1)], "praying": [(D, 1)], "fighting": [(V, 1), (M, 1)],
+ "lying": [(C, -1)], "stealing": [(C, -1)], "giving": [(W, 1)], "working": [(D, 1)], "mocking": [(W, -1)],
+ "flattering": [(C, -1)], "training": [(D, 1)], "killing": [(W, -1), (V, -1)], "healing": [(W, 1)],
+ "lording": [(M, 1), (W, -1)], "yielding": [(M, -1)], "studying": [(O, 1)], "carousing": [(E, 1), (D, -1)],
+ "hiding": [(E, -1)], "using": [(D, -1)], "hunting": [(V, -1)],
+}
+INDULGENT = ("drinking", "gambling", "using", "carousing", "lust", "a substance")
+INCLINE_GAIN = 0.12
+INCLINE_FADE = 0.01
+INCLINE_PRESS = 0.15
+
+
+def incline(n, key, axes=None, times=1):
+    """Someone did or showed `key` again. Returns notes."""
+    inc = n.setdefault("inclinations", {})
+    rec = inc.setdefault(key, {"strength": 0.0, "count": 0, "last": n["day"]})
+    notes = []
+    before = rec["strength"]
+    for _ in range(times):
+        rec["strength"] = round(rec["strength"] + INCLINE_GAIN * (1 - rec["strength"]), 4)
+        rec["count"] += 1
+        for axis, sgn in (axes or []):
+            affect(n)["pressure"][axis] += sgn * INCLINE_PRESS
+    rec["last"] = n["day"]
+    if before < 0.5 <= rec["strength"]:
+        notes.append("%s has become a habit: it fills the gaps when nothing else decides" % key)
+    if rec["strength"] >= 0.7 and not any(c.get("from_habit") == key for c in n["compulsions"]):
+        n["compulsions"].append({"urge": key, "control": 9, "threshold": 3, "pressure": 0, "from_habit": key})
+        notes.append("%s has become a compulsion (control 9)" % key)
+    if key in INDULGENT and rec["strength"] >= 0.5:
+        h = affect(n)["habit"]
+        was = h.get("pleasure", 0.0)
+        h["pleasure"] = min(0.9, was + 0.05)
+        if was < 0.4 <= h["pleasure"]:
+            notes.append("it satisfies less than it did; they reach for more of it")
+    notes += settle_traits(n)
+    return notes
+
+
+def incline_day(n):
+    """Inclinations fade when not fed; strong ones crave."""
+    notes = []
+    inc = n.get("inclinations", {})
+    for key in list(inc):
+        rec = inc[key]
+        idle = n["day"] - rec["last"]
+        if idle >= 1:
+            rec["strength"] = round(max(0.0, rec["strength"] - INCLINE_FADE), 4)
+        if rec["strength"] >= 0.6 and idle == 3:
+            st = n["needs"]["state"]
+            st["Comfort"] = clamp(st["Comfort"] - 1, -2, 1)
+            notes.append("craving %s: three days without it" % key)
+        if rec["strength"] <= 0:
+            del inc[key]
+    return notes
+
+
+def habit_form(n, band_key, active):
+    """The strongest manner they've made a habit of, if it fits this band and every circumstance."""
+    inc = n.get("inclinations", {})
+    pool = {"Kind": KIND_FORMS, "Middle": MIDDLE_FORMS, "Hostile": HOSTILE_FORMS}[band_key]
+    best = None
+    for key, rec in inc.items():
+        if key in pool and rec["strength"] >= 0.5 and all(_passes(key, c, n) for c in active):
+            if best is None or rec["strength"] > inc[best]["strength"]:
+                best = key
+    return best
+
+
+def cmd_habit(a):
+    n = load(a.file)
+    key = a.act.strip().lower()
+    notes = incline(n, key, ACT_AXES.get(key), a.times)
+    rec = n["inclinations"][key]
+    save(n, a.file)
+    print("%s: %s x%d, inclination %.2f%s" % (n["name"], key, rec["count"], rec["strength"],
+                                             ". " + "; ".join(notes) if notes else ""))
+
 
 # ---------- relationships and processing ----------
 ROLES = ["child", "parent", "sibling", "spouse", "lover", "kin", "friend", "dependant", "student", "mentor",
@@ -1853,7 +2284,7 @@ def cmd_violence(a):
         print("The place keeps: " + keeps)
     hurt = set(x.lower() for x in (a.hurt or []))
     members = load(a.circle).get("members", []) if a.circle else []
-    for n in ns:
+    for path, n in zip(a.files, ns):
         vc = relation_to(n, a.victim, members)
         ac = relation_to(n, a.attacker, members)
         r = violence_response(n, n["name"].lower() in hurt, vc[0], ac[0], a.symbol)
@@ -1862,6 +2293,11 @@ def cmd_violence(a):
         if a.victim and vc[0] != "stranger": rel.append("%s is their %s" % (a.victim, vc[1]))
         if a.attacker and ac[0] != "stranger": rel.append("%s is their %s" % (a.attacker, ac[1]))
         if a.symbol and a.symbol == n["creed"]: rel.append("it strikes at what they hold highest")
+        if a.record and n["name"].lower() not in hurt:
+            n["memory"].append({"day": n["day"], "event": "witnessed", "with": a.attacker or "",
+                                "note": "%s hurt" % (a.victim or "someone")})
+            fx = apply_affect(n, "witnessed", vc[0], EVENTS["witnessed"][2])
+            save(n, path)
         print("%s (%s%s): %s - %s%s" % (n["name"], processing(n), "; " + "; ".join(rel) if rel else "", r,
                                         RESPONSES[r], " | outwardly unchanged: this is already who they are" if st
                                         else " | outward manner changes for the rest of the day"))
@@ -1976,6 +2412,7 @@ def main():
     for fl in ("solemn", "festive", "superior", "duty", "drunk", "tired", "sick", "grieving", "private"):
         x.add_argument("--" + fl, action="store_true")
     x.add_argument("--their-strength", type=int, default=2); x.add_argument("--ground", type=int, default=0)
+    x.add_argument("--dry-run", action="store_true", help="look without recording that they showed it")
     x.set_defaults(f=cmd_meet)
     x = sp.add_parser("ask"); x.add_argument("file"); x.add_argument("--who", default="player")
     x.add_argument("--touched", action="store_true"); x.add_argument("--asked", action="store_true")
@@ -1996,7 +2433,9 @@ def main():
     x = sp.add_parser("violence"); x.add_argument("files", nargs="*"); x.add_argument("--world")
     x.add_argument("--dials"); x.add_argument("--hurt", nargs="*"); x.add_argument("--place")
     x.add_argument("--victim"); x.add_argument("--attacker"); x.add_argument("--symbol", choices=CREEDS)
-    x.add_argument("--circle"); x.set_defaults(f=cmd_violence)
+    x.add_argument("--circle"); x.add_argument("--record", action="store_true",
+                                               help="write what each witness felt into their ledger")
+    x.set_defaults(f=cmd_violence)
     x = sp.add_parser("place"); x.add_argument("file"); x.add_argument("--name"); x.add_argument("--dials")
     x.add_argument("--add", nargs="*"); x.set_defaults(f=cmd_place)
     x = sp.add_parser("tie"); x.add_argument("file"); x.add_argument("--to", required=True)
@@ -2005,6 +2444,8 @@ def main():
     x.set_defaults(f=cmd_tie)
     x = sp.add_parser("tide"); x.add_argument("world"); x.add_argument("--dials"); x.set_defaults(f=cmd_tide)
     x = sp.add_parser("audit"); x.set_defaults(f=cmd_audit)
+    x = sp.add_parser("habit"); x.add_argument("file"); x.add_argument("act")
+    x.add_argument("--times", type=int, default=1); x.set_defaults(f=cmd_habit)
     x = sp.add_parser("styles"); x.set_defaults(f=cmd_styles)
     x = sp.add_parser("roll"); x.add_argument("expr"); x.set_defaults(f=cmd_roll)
     a = p.parse_args()
