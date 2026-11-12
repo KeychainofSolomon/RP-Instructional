@@ -29,6 +29,7 @@ References (read when needed):
 - `references/affect.md` — pain, elation and clarity; getting used to things; inclinations and
   habits; how traits change against the anchor of who someone is.
 - `references/speech.md` — 25 ways of talking, slang mechanisms, honest and manipulative speech.
+- `references/knowledge.md` — beliefs and where they came from; rumours, false accusations, secrets.
 - `references/places.md` — place sheets: what is always there, and what violence leaves behind.
 - `references/violence.md` — registers, language, dissonance and responses for violent scenes.
 - `references/tables.md` — stations, offices, ties, codes, quirks, oddities, danger words.
@@ -57,6 +58,9 @@ solemn hour or a trusted, private conversation lift it). Someone who doesn't not
 never wonders where it came from, and never comments on it. Their nature and circumstance decide whether it shows and how (half a
 sentence said aloud and caught, a name under the breath, a flinch, a hand that stops, a pause, or
 nothing). Never narrate the thought itself. Show its ripple, or the exact words that slip out.
+Most thoughts mean nothing: an old kitchen during talk of a murder, a door left unlocked, a word
+that sounds wrong. A thought is not a motive and not a clue, and it needn't match what they want.
+Never turn a ripple into a pointed hint, and never let a run of thoughts add up to exposition.
 
 Don't read the section of `scripts/forge.py` marked SEALED, and never open a sealed record file
 (`scene --seal`); those are for the people at the table, not for the narrator.
@@ -261,6 +265,34 @@ All rolled upstream (before the scene or when a character is created), never as 
 | **Punctuation latitude** | worked out per encounter, not rolled | Prose and dialogue may use the full range: a semicolon, an exclamation point, and SOMETIMES a word in capitals for emphasis or a raised voice. `meet` names what suits this person now: exclamations and the odd CAPITAL when someone shouts (rage, panic, a hot temper under pain); easy exclamations for bright, festive, drunk or excitable people; full sentences with a semicolon for measured, formal, solemn or dutiful ones. None for the frozen or stunned; no capitals in a moment of clarity. A latitude, not a tic: a few times a scene at most, never on every line, never as a sign of lying. The narration itself may use them too, sparingly. |
 | **Oddity** | 1% per scene, at most one | A small strange behaviour. Uncanny ones only if Strangeness ≥2. Never reveals hidden information. |
 
+## Identity under strain
+
+Everyone has a recognisable way of taking six kinds of strain (humiliation, threat, loss,
+betrayal, praise, being cornered), worked out at creation from their traits and voices with a
+personal idiosyncrasy, and kept for life: two equally proud people can withdraw, confront, laugh
+it off and remember, or reach to mend things. `event` says how they take it; `meet` shows it when
+they're pressed; memories keep how it landed, and `meet` brings back what they carry from before
+with the person in front of them.
+
+## Ordinary life
+
+Most of life means nothing, and the system says so: about two days in five are ordinary (thirty-odd
+kinds: errands, chores, a dull day and glad of it), a third of encounters carry some inconsequential
+business (counting under their breath, looking for something they put down), 2–5% hold an honest
+misunderstanding that can be cleared up, three in four oddities have an ordinary reason nobody will
+mention, and most thoughts are stray. Never treat any of these as a clue. If everything is
+suspicious, nothing is.
+
+## Knowledge: what people believe
+
+People hold beliefs, never truth (`references/knowledge.md`). Each belief records its source
+(witnessed, heard, read, inferred, imagined), who it came from, how sure they are, how reliable the
+source was, when they learnt it, what they take it to mean, and the details that have gone wrong in
+it. Seeing it under stress gets details wrong; every retelling may change it (more so from spinners
+and gossips); hearing it again makes them surer, true or not; second-hand certainty fades; memory
+quietly rewrites the odd detail. Secrets pass only to the trusted. Characters speak only from what
+they believe; `meet` says what they believe about the person in front of them.
+
 ## Memory and slow change
 
 A character on the scene **always remembers who they are and everything they've lived through
@@ -276,7 +308,8 @@ have a wider margin for it, and those who find it grow toward it. **Inclinations
 whatever someone keeps doing, filling quiet moments as habit and, if strong, becoming
 compulsion. Traits change only when the pressure of all this outweighs the anchor of their
 underlying nature; a change held long enough becomes part of who they are. Nothing holds
-forever. See affect.md and time.md.
+forever. People are not clocks: each person has their own pace of grieving, of feelings fading
+and of old memories coming back (more on an anniversary, less as they age). See affect.md and time.md.
 
 ## Guards against fringe cases
 

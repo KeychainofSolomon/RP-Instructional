@@ -155,3 +155,13 @@ python scripts/forge.py habit maren.json drinking --times 2
 python scripts/forge.py violence ... --record      # what each witness felt goes into their ledger
 python scripts/forge.py day maren.json             # feeling fades, familiarity loosens, clarity may strike
 ```
+
+## Personal tempo
+
+People are not clocks. Each person carries their own pace, worked out at creation with personal
+variance: how long grief runs for them (a loss's usual length times their grief tempo, times the
+variance of that particular loss), how fast feelings and habituation fade, and how readily old
+memories come back. The mechanics stay the same for everyone; the pace is theirs. An important
+memory (a heavy event, a loss, a betrayal, something they took by remembering it) can resurface
+on any day, more often on its anniversary and less as it ages, bringing a little of its feeling
+back with it. The audit checks that recovery from the same kind of loss varies widely between people.

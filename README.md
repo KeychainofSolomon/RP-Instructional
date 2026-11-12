@@ -103,6 +103,13 @@ rhymes, borrowings, cant, codes), so the narrator invents words that fit any wor
 code-switch for authority. Each person also has a way of bending words, from plain dealing
 through paltering and spin to working on people, and none of it is ever a tell.
 
+Everyone keeps a recognisable way of taking strain (humiliation, threat, loss, betrayal, praise,
+being cornered) for life, and memories keep how things landed. Most of life is ordinary: dull days,
+inconsequential business, honest misunderstandings, oddities with mundane reasons, stray thoughts.
+People hold beliefs, never truth: each records where it came from, how sure they are and what
+they take it to mean, and rumours drift as they spread. Each person grieves and recovers at
+their own pace.
+
 Punctuation is part of how someone speaks. Semicolons, exclamation points and the odd word in
 CAPITALS are all allowed, and the engine says which suit the person and the moment: a shout
 gets an exclamation and maybe a capitalised word, a bright or drunk person exclaims easily, a

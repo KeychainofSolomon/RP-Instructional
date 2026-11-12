@@ -4,7 +4,7 @@
 Dice go upstream: every random roll decides something about a character's life, history
 or day. Reactions are then computed from those causes, never rolled directly.
 """
-import argparse, collections, json, math, random, sys
+import argparse, collections, hashlib, json, math, random, sys
 
 AX = ["Candour", "Volatility", "Energy", "Warmth", "Discipline", "Openness", "Dominance"]
 C, V, E, W, D, O, M = range(7)
@@ -371,7 +371,7 @@ def fill(text, n, rung):
 
 
 def build(dials, name=None, kind="person"):
-    n = {"name": name or "(unnamed)", "type": kind, "dials": dials, "day": 0, "condition": "present",
+    n = {"id": new_id(), "schema": SCHEMA, "name": name or "(unnamed)", "type": kind, "dials": dials, "day": 0, "condition": "present",
          "memory": [], "trust": {}, "marks": {}, "starved_days": {r: 0 for r in RUNGS},
          "sated_days": {r: 0 for r in RUNGS}, "recent_causes": [], "today": None, "shifts": {}}
     fl = d(100)
@@ -499,6 +499,8 @@ def build(dials, name=None, kind="person"):
             dirn = ds[0] if ds[0] != 2 else random.choice([1, -1])
             n["scars"][cat] = {"dir": dirn, "form": ds[1]}
     speech_build(n, random.Random(random.random()))
+    strain_build(n, random.Random(random.random()))
+    tempo_build(n, random.Random(random.random()))
     return n
 
 
@@ -560,7 +562,7 @@ def total_trust(n, who):
 def load(p):
     try:
         with open(p, encoding="utf-8") as f:
-            return json.load(f)
+            return migrate(json.load(f))
     except FileNotFoundError:
         sys.exit("No such file: %s" % p)
     except ValueError:
@@ -745,6 +747,10 @@ def cmd_day(a):
                 notes.append(drift_authenticity(n, -1))
         if x == "Selfhood" and n["sated_days"][x] == 21:
             notes.append(drift_authenticity(n, 1))
+    back = resurface(n)
+    if back:
+        notes.append("an old memory came back to them today: the %s%s" % (back["event"], ", on its anniversary" if back["anniversary"] else ""))
+    belief_day(n)
     notes += affect_day(n)
     notes += incline_day(n)
     notes += clarity_check(n)
@@ -789,7 +795,7 @@ def cmd_day(a):
     VIEW.clear()
     VIEW.update({"cmd": "day", "name": n["name"], "cause": cause, "value": val, "rung": rung,
                  "open": open_today, "trailing": trailing, "notes": [x for x in notes if x],
-                 "lasting": {k: v for k, v in af.items() if k not in ("grief_delay", "grief_pending")}})
+                 "lasting": {k: v for k, v in af.items() if k not in ("grief_delay", "grief_pending")}, "resurfaced": back})
 
 
 def drift_authenticity(n, step):
@@ -1416,6 +1422,323 @@ def speech_now(n, active, band, scheming=False, rng=None):
             "register": REG_WORD[reg], "length": LEN_WORD[ln], "slang": slang, "bend": bend, "bend_kind": sp["bend"]}
 
 
+
+# ---------- identity under strain: a recognisable pattern of choices, kept for life ----------
+STRAIN_WAYS = {
+    "withdraw": "goes quiet and pulls back, and keeps their distance afterwards",
+    "confront": "faces it head-on, there and then",
+    "laugh_remember": "laughs it off in front of others, and remembers it exactly",
+    "reconcile": "reaches to mend things, because the bond matters more than the sting",
+    "retaliate_later": "says nothing now and settles it later, in their own time",
+    "freeze": "goes still and blank, and acts only once it's over",
+    "appease": "gives ground and tries to make it right, even when it isn't theirs to",
+    "deflect": "turns it aside with a joke or a change of subject",
+    "formal": "retreats into correctness: rules, roles, the proper forms",
+    "rally": "goes to their own people and makes it a matter for all of them",
+    "coldness": "turns politely and lastingly cold",
+    "self_blame": "turns it on themself; works harder, sleeps worse",
+    "basks": "basks in it, and wants more",
+    "suspects": "wonders what it's for",
+    "shares": "hands the credit to others",
+}
+STRAIN_FIT = {  # axis weights, styles that lean this way
+    "withdraw": ({E: -1, M: -1}, ("Solitary", "Sensitive")),
+    "confront": ({M: 1.5, V: 1, C: 0.5}, ("Commanding", "Adventurous", "Zealot")),
+    "laugh_remember": ({E: 1, D: 0.5, C: -1}, ("Dramatic", "Schemer", "Mercurial")),
+    "reconcile": ({W: 1.5, M: -0.5}, ("Benevolent", "Devoted", "Self-Sacrificing")),
+    "retaliate_later": ({D: 1, W: -1, C: -1}, ("Predator", "Schemer", "Vigilant")),
+    "freeze": ({V: 1, E: -1, M: -1.5}, ("Sensitive",)),
+    "appease": ({W: 1, M: -1.5}, ("Self-Sacrificing", "Devoted")),
+    "deflect": ({E: 1, O: 0.5, V: -0.5}, ("Leisurely", "Mercurial", "Dramatic")),
+    "formal": ({D: 1.5, O: -1}, ("Conscientious", "Professional", "Serious")),
+    "rally": ({W: 0.5, M: 0.5}, ("Commanding", "Devoted")),
+    "coldness": ({W: -1, D: 1}, ("Serious", "Self-Assured")),
+    "self_blame": ({V: 0.5, M: -1, C: 0.5}, ("Sensitive", "Conscientious", "Self-Sacrificing")),
+    "basks": ({E: 1, M: 1}, ("Dramatic", "Self-Assured")),
+    "suspects": ({C: -0.5, O: -0.5, D: 0.5}, ("Vigilant", "Schemer")),
+    "shares": ({W: 1, M: -1}, ("Benevolent", "Devoted")),
+}
+STRAINS = {
+    "humiliation": ("withdraw", "confront", "laugh_remember", "reconcile", "retaliate_later", "deflect", "coldness", "self_blame"),
+    "threat": ("confront", "freeze", "appease", "rally", "withdraw", "deflect", "formal", "retaliate_later"),
+    "loss": ("withdraw", "formal", "self_blame", "rally", "deflect", "freeze"),
+    "betrayal": ("confront", "coldness", "retaliate_later", "reconcile", "withdraw", "self_blame", "rally", "laugh_remember"),
+    "praise": ("basks", "suspects", "shares", "deflect", "withdraw", "self_blame"),
+    "cornered": ("confront", "freeze", "appease", "deflect", "formal", "rally", "retaliate_later", "laugh_remember"),
+}
+EVENT_STRAIN = {"humiliation": "humiliation", "threat": "threat", "loss": "loss", "betrayal": "betrayal",
+                "lie-caught": "betrayal", "respect": "praise", "triumph": "praise"}
+HOLDS_IT = {"laugh_remember", "retaliate_later", "coldness"}
+
+
+def _strain_score(way, n):
+    ax_w, styles = STRAIN_FIT[way]
+    sc = 1.0 + 0.6 * sum(w * n["axes"][i] for i, w in ax_w.items())
+    sc += sum(2 * v["frac"] for v in n["voices"] if v["style"] in styles)
+    if way == "rally" and n.get("creed") in ("Kin", "Order"):
+        sc += 1
+    return max(0.05, sc) ** 2
+
+
+def strain_build(n, rng=None):
+    rng = rng or random.Random("strain:%s" % n.get("id", n.get("name")))
+    # traits set the odds; a personal idiosyncrasy per choice keeps similar people from being copies
+    n["strain"] = {p: rng.choices(ways, [_strain_score(w, n) * rng.lognormvariate(0, 0.7) for w in ways])[0]
+                   for p, ways in STRAINS.items()}
+    return n["strain"]
+
+
+def strain_of(n):
+    if not isinstance(n.get("strain"), dict) or set(n["strain"]) != set(STRAINS):
+        strain_build(n)
+    return n["strain"]
+
+
+# ---------- ordinary life: most days, most business, most odd moments mean nothing ----------
+ORDINARY += [
+    "a chore that took longer than it should have", "a small errand, done", "mended something that keeps breaking",
+    "waited a long time for something that came in the end", "a good meal, nothing special about it",
+    "lost something small and found it again", "talked about the weather with a neighbour",
+    "an argument about nothing, already forgotten", "a bit of gossip that went nowhere", "a stiff neck from sleeping wrong",
+    "paid a small bill", "a long walk somewhere and back", "too much to do and too little time, as usual",
+    "a quiet day; nothing happened", "heard a song they couldn't get out of their head", "cleaned up after someone else",
+    "had to wait their turn", "a visit from someone who stayed too long", "the usual work, the usual way",
+    "an old acquaintance passed in the street and they didn't stop", "a minor mix-up over who was meant to do what",
+    "ran out of something ordinary and had to borrow", "a dull day, and glad of it", "fixed a squeak, a leak or a draught",
+    "a small win at a game, a small loss at another", "sorted through old things and kept most of them",
+    "got caught in the rain or the heat", "a misunderstanding with a stranger, cleared up", "slept well for once",
+    "the same as yesterday",
+]
+BUSINESS = [
+    "counting something under their breath", "eating while they talk", "mending or fiddling with something small",
+    "waiting for someone who's late", "looking for something they've put down", "finishing a task they won't leave half done",
+    "keeping half an eye on something across the room", "tidying what doesn't need tidying", "making a list",
+    "complaining mildly about something unrelated", "trying to remember a name", "rubbing a sore hand or shoulder",
+    "carrying something they need to put down", "on their way somewhere else", "humming without noticing",
+    "fussing with a stain or a loose thread", "working out what they owe someone, or what someone owes them",
+    "half-listening to another conversation", "warming their hands or fanning themself", "fed up with a neighbour's noise",
+]
+MISHEAR = [
+    "mishears a word you say and answers the wrong question",
+    "takes something you say more seriously than you meant it",
+    "takes something you say as a joke when it wasn't",
+    "thinks you mean someone else when you mention a person",
+    "reads a gesture of yours the wrong way",
+    "assumes you already know something you don't",
+]
+
+
+def ordinary_beats(n, active, rng=None):
+    """Inconsequential business and the odd honest misunderstanding: texture, never clues."""
+    rng = rng or random
+    act = set(active)
+    beats = {"business": None, "mishear": None}
+    if not act & {"frozen", "stunned", "hurt", "afraid", "enraged"} and rng.random() < 0.3:
+        beats["business"] = rng.choice(BUSINESS)
+    chance = 0.02 + (0.02 if act & {"exhausted", "intoxicated", "sick"} else 0) + \
+        (0.01 if act & {"public", "festive"} else 0) + (0.01 if n["axes"][O] <= -2 else 0)
+    if not act & {"frozen", "stunned"} and rng.random() < min(chance, 0.05):
+        beats["mishear"] = rng.choice(MISHEAR)
+    return beats
+
+
+# ---------- schema and identity ----------
+SCHEMA = 3
+
+
+def new_id(rng=None):
+    return "p%012x" % (rng or random).getrandbits(48)
+
+
+def tempo_build(n, rng=None):
+    """How fast this person, in particular, recovers and how readily old things come back to them.
+    People are not clocks: the mechanics stay, the pace is theirs."""
+    rng = rng or random.Random("tempo:%s" % n.get("id", n.get("name")))
+    v = n["axes"][V]
+    n["tempo"] = {"grief": round(clamp(rng.lognormvariate(0.05 * v, 0.35), 0.4, 2.5), 2),
+                  "fade": round(clamp(rng.lognormvariate(-0.05 * n["axes"][D], 0.3), 0.5, 2.0), 2),
+                  "recall": round(clamp(rng.lognormvariate(0.1 * v, 0.5), 0.2, 3.0), 2)}
+    return n["tempo"]
+
+
+def tempo_of(n):
+    if not isinstance(n.get("tempo"), dict) or set(n["tempo"]) != {"grief", "fade", "recall"}:
+        tempo_build(n)
+    return n["tempo"]
+
+
+def resurface(n):
+    """Now and then an old memory comes back unbidden, more on its anniversary, less as it ages."""
+    tp = tempo_of(n)
+    for m in reversed((n.get("memory") or [])[-40:]):
+        if not (m.get("weight", 0) >= 2 or m.get("took") in HOLDS_IT or m.get("event") in ("loss", "betrayal", "rescue")):
+            continue
+        age = n["day"] - m.get("day", 0)
+        if age <= 0:
+            continue
+        p_ = 0.015 * tp["recall"] / (1 + age / 60.0) + (0.25 if age % 365 == 0 else 0)
+        if random.random() < p_:
+            sign = EVENTS.get(m["event"], (0,))[0] or (-1 if m["event"] in ("loss", "witnessed") else 1)
+            af = affect(n)
+            af["feeling"] = clamp(af["feeling"] + 0.5 * sign * max(1, m.get("weight", 1)), -10, 10)
+            return {"event": m["event"], "with": m.get("with"), "anniversary": age % 365 == 0}
+    return None
+
+
+def migrate(n):
+    """Bring a person's ledger up to the current schema. Never changes who they are: an id
+    once given is kept for life; missing layers are worked out the same way every time."""
+    if not isinstance(n, dict) or "axes" not in n:
+        return n
+    if not n.get("id"):
+        n["id"] = "p" + hashlib.sha256(("%s|%s|%s" % (n.get("name"), n.get("axes"), n.get("voices"))).encode()).hexdigest()[:12]
+    speech_of(n)
+    strain_of(n)
+    tempo_of(n)
+    n["schema"] = SCHEMA
+    return n
+
+
+
+# ---------- knowledge: what people believe, where it came from, and how sure they are ----------
+# Four domains stay apart: what happened (the campaign's facts, kept outside any person), what
+# each person believes (here), what the narrator is told (briefs), what the player has found out.
+# A belief never carries whether it is true. People can be confidently wrong.
+SOURCE_BASE = {"witnessed": 0.85, "read": 0.6, "heard": 0.5, "inferred": 0.45, "imagined": 0.3}
+DISTORT = {"who": "has the wrong person in it", "when": "has the timing wrong", "count": "has the numbers wrong",
+           "where": "has it happening in the wrong place", "bigger": "has grown in the telling",
+           "smaller": "has shrunk in the telling", "motive": "adds a reason nobody gave",
+           "order": "has things in the wrong order"}
+MEANINGS = {
+    "proof": ("proof of what they already thought", {O: -1, D: 0.5}, ()),
+    "warning": ("a warning to them", {V: 0.5, W: -0.5}, ("Vigilant",)),
+    "not_mine": ("none of their business", {W: -1, E: -0.5}, ("Solitary",)),
+    "a_lie": ("a lie somebody is spreading", {C: -0.5, O: 0.5}, ("Vigilant", "Schemer")),
+    "chance": ("an opportunity", {M: 0.5, W: -0.5}, ("Schemer", "Self-Made", "Predator")),
+    "sign": ("a sign of something larger", {O: 1}, ("Visionary", "Zealot")),
+    "scandal": ("a scandal worth repeating", {E: 1, C: -0.5}, ("Dramatic", "Mercurial")),
+    "wrong": ("a wrong that should be put right", {C: 1, M: 0.5}, ("Zealot", "Commanding")),
+    "shame": ("a shame on someone's people", {W: 0.5, D: 0.5}, ("Devoted", "Serious")),
+    "joke": ("a joke, mostly", {E: 1, V: -0.5}, ("Leisurely", "Adventurous")),
+    "worry": ("something to worry about", {V: 1, M: -0.5}, ("Sensitive", "Self-Sacrificing")),
+}
+CREED_MEANING = {"Justice": "wrong", "Kin": "shame", "Faith": "sign", "Gain": "chance", "Security": "warning",
+                 "Order": "wrong", "Pleasure": "scandal", "Thrill": "joke", "Freedom": "a_lie"}
+GOSSIP_TALK = ("Salon", "Yarn-Spinner", "Braggart", "Muddler")
+
+
+def sure_word(c):
+    return "certain" if c >= 0.85 else "sure" if c >= 0.65 else "fairly sure" if c >= 0.45 else \
+        "unsure" if c >= 0.25 else "half-believes it"
+
+
+def _meaning(n, rng):
+    keys = sorted(MEANINGS)
+    w = []
+    for k in keys:
+        _, axw, styles = MEANINGS[k]
+        sc = 1 + 0.5 * sum(x * n["axes"][i] for i, x in axw.items()) + sum(1.5 * v["frac"] for v in n["voices"] if v["style"] in styles)
+        if CREED_MEANING.get(n.get("creed")) == k:
+            sc += 1.5
+        w.append(max(0.05, sc) * rng.lognormvariate(0, 0.5))
+    return keys[w.index(max(w))]
+
+
+def credulity(n):
+    a = n["axes"]
+    c = 0.05 * a[W] - 0.05 * a[D] + (0.1 if speech_of(n)["main"] == "Earnest" else 0)
+    c -= 0.1 if any(v["style"] in ("Vigilant", "Schemer") for v in n["voices"] if v["frac"] >= 0.4) else 0
+    c -= 0.1 if strain_of(n).get("praise") == "suspects" else 0
+    return c
+
+
+def learn_belief(n, subject, claim, source, frm=None, reliability=None, fact=None, secret=False, stressed=False,
+                 distortions=None, hops=0, rng=None):
+    """Add what someone has come to believe. Returns the belief as they hold it."""
+    rng = rng or random
+    if source not in SOURCE_BASE:
+        sys.exit("A belief comes from one of: " + ", ".join(SOURCE_BASE))
+    if reliability is None:
+        reliability = 1.0 if source == "witnessed" else (total_trust(n, frm) + 5) / 10.0 if frm else 0.5
+    reliability = clamp(reliability, 0.0, 1.0)
+    conf = SOURCE_BASE[source] * (0.5 + 0.5 * reliability) + (credulity(n) if source != "witnessed" else 0)
+    dist = list(distortions or [])
+    slip = (0.35 if stressed else 0.10) if source == "witnessed" else 0.0
+    if source == "imagined":
+        slip = 0.3
+    if rng.random() < slip:
+        dist.append(rng.choice([k for k in DISTORT if k not in dist] or list(DISTORT)))
+    kb = n.setdefault("knows", [])
+    same = [b for b in kb if b["subject"].lower() == subject.lower() and b["claim"] == claim]
+    if same:  # heard again: more sure, true or not
+        b = same[0]
+        b["confidence"] = round(clamp(1 - (1 - b["confidence"]) * (1 - 0.7 * conf), 0, 0.98), 3)
+        b["reinforced"] = b.get("reinforced", 0) + 1
+        b["last"] = n["day"]
+        if frm and frm not in b["also_from"]:
+            b["also_from"].append(frm)
+        return b
+    b = {"k": "b%08x" % rng.getrandbits(32), "subject": subject, "claim": claim, "source": source, "from": frm,
+         "also_from": [], "day": n["day"], "last": n["day"], "confidence": round(clamp(conf, 0.05, 0.98), 3),
+         "reliability": round(reliability, 2), "meaning": _meaning(n, rng), "distortions": dist, "hops": hops,
+         "fact": fact, "secret": bool(secret), "reinforced": 0}
+    kb.append(b)
+    n["knows"] = kb[-200:]
+    return b
+
+
+def tell_belief(teller, hearer, subject, rng=None):
+    """Teller passes on what they believe about a subject, as they would tell it. Rumours drift."""
+    rng = rng or random
+    held = sorted([b for b in teller.get("knows", []) if b["subject"].lower() == subject.lower()],
+                  key=lambda b: -b["confidence"])
+    if not held:
+        return None, "%s knows nothing about that to pass on." % teller["name"]
+    b = held[0]
+    if b["secret"] and total_trust(teller, hearer["name"]) < 3:
+        return None, "%s keeps it to themself." % teller["name"]
+    dist = list(b["distortions"])
+    p_ = 0.25
+    bend = speech_of(teller)["bend"]
+    if bend in ("Spinner", "Worker", "Palterer"): p_ += 0.15
+    if speech_of(teller)["main"] in GOSSIP_TALK: p_ += 0.10
+    if rng.random() < p_:
+        pool = ["bigger", "motive"] if bend in ("Spinner", "Worker") else list(DISTORT)
+        new = [k for k in pool if k not in dist]
+        if new:
+            dist.append(rng.choice(new))
+    got = learn_belief(hearer, b["subject"], b["claim"], "heard", frm=teller["name"], fact=b.get("fact"),
+                       secret=False, distortions=dist, hops=b["hops"] + 1, rng=rng)
+    return got, None
+
+
+def belief_day(n, rng=None):
+    """Second-hand certainty fades unless repeated; memory quietly rewrites the odd detail."""
+    rng = rng or random
+    tp = tempo_of(n)
+    for b in n.get("knows", []):
+        if b["source"] != "witnessed" and n["day"] - b.get("last", b["day"]) > 7:
+            b["confidence"] = round(max(0.05, b["confidence"] - 0.004 * tp["fade"]), 3)
+        if rng.random() < 0.002 * tp["recall"] and len(b["distortions"]) < 3:
+            b["distortions"].append(rng.choice([k for k in DISTORT if k not in b["distortions"]]))
+
+
+def beliefs_about(n, subject):
+    return sorted([b for b in n.get("knows", []) if b["subject"].lower() == (subject or "").lower()],
+                  key=lambda b: -b["confidence"])
+
+
+def belief_plain(b, subject=True):
+    """What the narrator may be told about one belief: what they believe and how they'd tell it."""
+    src = {"witnessed": "saw it themself", "read": "read it", "heard": "heard it" + (" from " + b["from"] if b["from"] else ""),
+           "inferred": "worked it out", "imagined": "suspects it, with nothing to go on"}[b["source"]]
+    hops = " (it came a long way round)" if b["hops"] >= 3 else ""
+    told = ("; as they tell it, it " + " and ".join(DISTORT[x] for x in b["distortions"])) if b["distortions"] else ""
+    return "%s%s. They %s%s; %s; to them it's %s%s%s." % (
+        (b["subject"] + ": ") if subject else "", b["claim"], src, hops, sure_word(b["confidence"]), MEANINGS[b["meaning"]][0], told,
+        "; they keep it to themself" if b["secret"] else "")
+
+
 SHOUT_FORMS = {"Violent Outburst", "Righteous Wrath", "Fear-Aggression", "Wounded-Panic", "Territorial"}
 BRIGHT_FORMS = {"Boastful", "Performing", "Teasing-Fond", "Mockery", "Flirtatious", "Gossipy", "Hospitable",
                 "Generous", "Mercurial", "Bargaining-Humour"}
@@ -1656,6 +1979,26 @@ def cmd_meet(a):
     for h in talk["here"]:
         print("  Here: " + h + ".")
     print("  How they bend words: %s. Never a tell by itself." % talk["bend"])
+    strained = bool(a.approach == "pressure" or a.opposed or a.hurt or set(a.danger or []) & {"violence", "authority"})
+    under = STRAIN_WAYS[strain_of(n)["cornered"]] if strained else None
+    if under:
+        print("Under strain, as always: " + under + ".")
+    beats = ordinary_beats(n, active)
+    if beats["business"]:
+        print("Ordinary business (means nothing): " + beats["business"] + ".")
+    if beats["mishear"]:
+        print("An honest misunderstanding this scene: " + beats["mishear"] + ". It can be cleared up; it means nothing more.")
+    carried = []
+    for m in reversed(n["memory"]):
+        if m.get("with") == a.who and (m.get("took") in HOLDS_IT or m.get("weight", 0) >= 2):
+            carried.append({"event": m["event"], "took": m.get("took")})
+        if len(carried) == 2:
+            break
+    believes = [belief_plain(b, subject=False) for b in beliefs_about(n, a.who if a.who != "player" else "you")[:2]]
+    for bp in believes:
+        print("Believes, about " + ("you" if a.who == "player" else a.who) + ": " + bp)
+    for c_ in carried:
+        print("Carries from before: the %s%s." % (c_["event"], ("; how they took it: " + STRAIN_WAYS[c_["took"]]) if c_.get("took") else ""))
     L = locals()
     VIEW.clear()
     VIEW.update({
@@ -1668,7 +2011,7 @@ def cmd_meet(a):
         "face_dropped": (not face_on) and au["kind"] != "Genuine",
         "violence_steady": bool(a.violence and td.get("shaken") is None),
         "shaken": td.get("shaken"), "danger_beat": lean, "danger_replaces": bool(lean and L.get("fits")),
-        "stratagem": plan, "quirks": qs, "speech": sp, "punctuation": punct, "talk": talk, "today": td.get("cause"),
+        "stratagem": plan, "quirks": qs, "speech": sp, "punctuation": punct, "talk": talk, "under_strain": under, "business": beats["business"], "mishear": beats["mishear"], "carried": carried, "believes": believes, "today": td.get("cause"),
     })
 
 
@@ -1892,6 +2235,119 @@ def cmd_audit(a):
     print("Speech: %d ways of talking; most common %s %d/3000, rarest %s %d/3000; bends %s; slang kinds %d." % (
         len(SPEECH), top[0], top[1], seen_m.most_common()[-1][0], seen_m.most_common()[-1][1],
         ", ".join("%s %d" % kv for kv in sorted(seen_b.items())), len(seen_s)))
+    # identity under strain, ordinary life, schema
+    _st = random.getstate()
+    seen_w = {p_: collections.Counter() for p_ in STRAINS}
+    profiles_seen = collections.Counter()
+    mis = bus = tries = 0
+    for i in range(2000):
+        random.seed(9000 + i)
+        q = build(list(DEFAULT_DIALS), "strain%d" % i)
+        for p_, w_ in q["strain"].items():
+            seen_w[p_][w_] += 1
+            if w_ not in STRAINS[p_]: problems.append("a way under strain that doesn't fit its strain: %s/%s" % (p_, w_))
+        profiles_seen[(q["speech"]["main"], tuple(sorted(q["strain"].items())))] += 1
+        before_id, before = q["id"], dict(q["strain"])
+        mq = migrate(json.loads(json.dumps(q)))
+        if mq["id"] != before_id or mq["strain"] != before or mq["speech"] != q["speech"] or mq["schema"] != SCHEMA:
+            problems.append("migration changed who someone is")
+        for combo in combos[:: max(1, len(combos) // 20)]:
+            active, _ = circ_active(q, set(combo))
+            b_ = ordinary_beats(q, active)
+            tries += 1; mis += bool(b_["mishear"]); bus += bool(b_["business"])
+            if set(active) & {"frozen", "stunned"} and b_["mishear"]:
+                problems.append("a misunderstanding while frozen")
+    for p_, c_ in seen_w.items():
+        if [w_ for w_ in STRAINS[p_] if not c_[w_]]:
+            problems.append("a way of taking %s never occurs" % p_)
+    if mis / tries > 0.05: problems.append("misunderstandings too common: %.3f" % (mis / tries))
+    twins = sum(v for v in profiles_seen.values() if v > 1)
+    biggest = profiles_seen.most_common(1)[0][1]
+    if biggest > 3: problems.append("people converge: %d of 2000 share one way of talking and taking things" % biggest)
+    if twins > 0.05 * 2000: problems.append("too many people share the same way of talking and taking things: %d" % twins)
+    q = build(list(DEFAULT_DIALS), "steady")
+    keep = dict(q["strain"])
+    for k_ in ["humiliation", "threat", "betrayal", "respect", "loss", "kindness"] * 30:
+        q["strain"] = strain_of(q)
+        if q["strain"] != keep: problems.append("a way of taking things changed with ordinary events"); break
+    ordinary_days = 0
+    for i in range(1000):
+        random.seed(7000 + i)
+        r_ = max(1, d(20) - 1)
+        ordinary_days += 7 <= r_ <= 14
+    if ordinary_days < 350: problems.append("too few ordinary days")
+    if len(set(ORDINARY)) < 30 or len(BUSINESS) < 15: problems.append("too little ordinary life to draw on")
+    random.setstate(_st)
+    print("Identity: %d ways of taking things across %d strains; %d of 2000 share a full profile (largest group %d); "
+          "misunderstandings %.1f%%, ordinary business %.0f%% of encounters; ordinary days about %d%%." % (
+              len(STRAIN_WAYS), len(STRAINS), twins, biggest, 100 * mis / tries, 100 * bus / tries, ordinary_days / 10))
+    # voice survives anger, exhaustion, a superior, privacy and grief without becoming someone else's
+    _st = random.getstate()
+    random.seed(424242)
+    conds = {"angry": {"enraged"}, "exhausted": {"exhausted"}, "superior": {"superior"}, "private": {"intimate"},
+             "grieving": {"grieving"}}
+    people = [build(list(DEFAULT_DIALS), "voice%d" % i) for i in range(300)]
+    confusable = 0
+    for q in people:
+        sp_ = speech_of(q)
+        mine = set(SPEECH[sp_["main"]]["dev"]); side = set(SPEECH[sp_["side"]]["dev"]) if sp_["side"] else set()
+        for cname, cs in conds.items():
+            active, _ = circ_active(q, cs)
+            t = speech_now(q, active, "Hostile" if cname == "angry" else "Neutral")
+            if t["manner"] != sp_["main"] or len(set(t["habits"]) & mine) < 2 or not set(t["habits"]) <= mine | side:
+                problems.append("voice lost under %s: %s" % (cname, sp_["main"]))
+    for q1, q2 in zip(people[::2], people[1::2]):
+        if speech_of(q1)["main"] != speech_of(q2)["main"]:
+            t1 = speech_now(q1, ["grieving"], "Neutral"); t2 = speech_now(q2, ["grieving"], "Neutral")
+            if t1["keys"] == t2["keys"] and set(t1["habits"]) == set(t2["habits"]):
+                confusable += 1
+    if confusable: problems.append("two different voices read the same under grief: %d" % confusable)
+    # thoughts are often mundane or irrelevant, and seldom about what they actually want
+    groups = collections.Counter()
+    for q in people[:150]:
+        ctx = {"dials": DEFAULT_DIALS, "present": ["player"], "prose": "The rain kept on at the shutters."}
+        for _ in range(20):
+            groups[_draw(q, ctx)[2]] += 1
+    tot = sum(groups.values())
+    stray = (groups["n"] + groups["z"]) / tot
+    motive = groups["w"] / tot
+    if stray < 0.30: problems.append("thoughts too seldom mundane or stray: %.2f" % stray)
+    if motive > 0.15: problems.append("thoughts track motives too closely: %.2f" % motive)
+    # recovery varies between people, even from the same kind of loss
+    spans = []
+    for q in people[:120]:
+        tp = tempo_of(q)
+        spans.append(tp["grief"] * random.lognormvariate(0, 0.25))
+    if max(spans) / min(spans) < 2.0: problems.append("grief runs like clockwork: everyone recovers alike")
+    # knowledge: provenance, drift, secrecy, no truth stored in anyone
+    w_c, h_c, dist_by_hop = [], [], collections.defaultdict(list)
+    for i, q in enumerate(people[:100]):
+        o = people[(i + 1) % 100]
+        q["knows"] = []; o["knows"] = []
+        b = learn_belief(q, "the well", "it was poisoned", "witnessed")
+        w_c.append(b["confidence"])
+        if not (0.05 <= b["confidence"] <= 0.98): problems.append("belief confidence out of range")
+        if any(k in b for k in ("true", "truth", "is_true")): problems.append("a belief carries whether it is true")
+        chain = [q] + [people[(i + j) % 100] for j in range(2, 7)]
+        for c_ in chain[1:]:
+            c_["knows"] = []
+        for j in range(len(chain) - 1):
+            got, err = tell_belief(chain[j], chain[j + 1], "the well")
+            if got:
+                dist_by_hop[got["hops"]].append(len(got["distortions"]))
+                if got["hops"] == 1: h_c.append(got["confidence"])
+        s_ = learn_belief(o, "a hiding place", "under the third stone", "witnessed", secret=True)
+        o["trust"][q["name"]] = {"bedrock": 0, "surface": 0}
+        if tell_belief(o, q, "a hiding place")[0] is not None: problems.append("a secret told to someone they don't trust")
+    if sum(w_c) / len(w_c) <= sum(h_c) / max(1, len(h_c)): problems.append("hearsay held as surely as what they saw")
+    if dist_by_hop[1] and dist_by_hop[5] and sum(dist_by_hop[5]) / len(dist_by_hop[5]) <= sum(dist_by_hop[1]) / len(dist_by_hop[1]):
+        problems.append("rumours don't drift as they spread")
+    if tell_belief(people[0], people[1], "something nobody knows")[0] is not None: problems.append("told what they don't know")
+    random.setstate(_st)
+    print("Voices: kept under anger, exhaustion, a superior, privacy and grief for 300 people. Thoughts: %.0f%% stray or "
+          "mundane, %.0f%% about what they want. Grief tempo varies %.1fx between people. Rumours: %.1f details wrong "
+          "after one telling, %.1f after five." % (100 * stray, 100 * motive, max(spans) / min(spans),
+          sum(dist_by_hop[1]) / max(1, len(dist_by_hop[1])), sum(dist_by_hop[5]) / max(1, len(dist_by_hop[5]))))
     def clar_probe(seed):
         random.seed(seed)
         c = build(list(DEFAULT_DIALS)); c["axes"] = [0] * 7; c["core"] = [0] * 7
@@ -2081,6 +2537,7 @@ def cmd_event(a):
         else:
             base, spread = GRIEF_DAYS.get(role or "kin", (7, 7))
             days = base + (d(spread) if spread else 0)
+            days = max(1, int(round(days * tempo_of(n)["grief"] * random.lognormvariate(0, 0.25)))) if days else 0
             if role in ("mentor", "spiritual", "symbol"):
                 st["Meaning"] = clamp(st["Meaning"] - 2, -2, 1)
             if days:
@@ -2098,11 +2555,52 @@ def cmd_event(a):
         af["intoxicated"] = 1
         notes.append("drunk or high for the rest of today")
     party = a.who if EVENTS[a.kind][0] else (a.about or "")
-    n["memory"].append({"day": n["day"], "event": a.kind, "with": party, "note": a.note or ""})
+    took = strain_of(n)[EVENT_STRAIN[a.kind]] if a.kind in EVENT_STRAIN else None
+    if took:
+        notes.append("takes it as they always do: " + STRAIN_WAYS[took])
+    n["memory"].append({"day": n["day"], "event": a.kind, "with": party, "note": a.note or "",
+                        "weight": sz, "took": took})
     derive(n)
     save(n, a.file)
     print("Recorded %s%s. " % (a.kind, (" with " if EVENTS[a.kind][0] else " concerning ") + party if party else "")
           + "; ".join(notes))
+    VIEW.clear()
+    VIEW.update({"cmd": "event", "name": n["name"], "kind": a.kind, "took": took, "took_text": STRAIN_WAYS.get(took)})
+
+
+
+def cmd_learn(a):
+    n = load(a.file)
+    b = learn_belief(n, a.subject, a.claim, a.source, frm=a.source_name, reliability=a.reliability, fact=a.fact,
+                     secret=a.secret, stressed=a.stressed)
+    save(n, a.file)
+    print("%s now believes: %s" % (n["name"], belief_plain(b)))
+    VIEW.clear(); VIEW.update({"cmd": "learn", "name": n["name"], "belief": b, "plain": belief_plain(b)})
+
+
+def cmd_tell(a):
+    t, h = load(a.teller), load(a.hearer)
+    if t.get("id") == h.get("id"):
+        sys.exit("Someone can't tell themself a rumour.")
+    if h["condition"] in ("dead", "comatose") or t["condition"] in ("dead", "comatose"):
+        sys.exit("Only the living and awake pass things on.")
+    b, err = tell_belief(t, h, a.about)
+    VIEW.clear()
+    if err:
+        print(err); VIEW.update({"cmd": "tell", "refused": err}); return
+    save(h, a.hearer)
+    print("%s now believes: %s" % (h["name"], belief_plain(b)))
+    VIEW.update({"cmd": "tell", "teller": t["name"], "hearer": h["name"], "belief": b, "plain": belief_plain(b)})
+
+
+def cmd_beliefs(a):
+    n = load(a.file)
+    bs = beliefs_about(n, a.about) if a.about else sorted(n.get("knows", []), key=lambda b: -b["confidence"])
+    for b in bs:
+        print(belief_plain(b))
+    if not bs:
+        print("%s believes nothing about that." % n["name"])
+    VIEW.clear(); VIEW.update({"cmd": "beliefs", "name": n["name"], "beliefs": bs, "plain": [belief_plain(b) for b in bs]})
 
 
 def cmd_affinity(a):
@@ -2196,8 +2694,9 @@ def cmd_scene(a):
     if r == 100:
         pool = ODD_PLAIN + (ODD_UNCANNY if dial(dials, "X") >= 2 else [])
         on, oo = random.choice(ns)["name"], random.choice(pool)
-        VIEW["oddity"] = {"name": on, "what": oo}
-        print("Oddity (%s): %s" % (on, oo))
+        mundane = oo in ODD_PLAIN and random.random() < 0.75
+        VIEW["oddity"] = {"name": on, "what": oo, "mundane": mundane}
+        print("Oddity (%s): %s%s" % (on, oo, " (an ordinary reason nobody will mention; not a clue)" if mundane else ""))
 
 
 def cmd_status(a):
@@ -2330,7 +2829,8 @@ def affect_day(n):
     """Everything arises and changes: feeling fades, habits loosen, pressure eases, cores follow."""
     af = affect(n)
     notes = []
-    af["feeling"] = round(af["feeling"] * 0.5, 2) if abs(af["feeling"]) >= 0.5 else 0.0
+    fade = tempo_of(n)["fade"]
+    af["feeling"] = round(af["feeling"] * clamp(0.5 ** (1.0 / fade), 0.25, 0.8), 2) if abs(af["feeling"]) >= 0.5 else 0.0
     arrived = 0.0
     keep = []
     for item in af["pending"]:
@@ -2344,7 +2844,7 @@ def affect_day(n):
         af["feeling"] = clamp(af["feeling"] + arrived, -10, 10)
         notes.append("what they didn't feel at the time arrives now (%+.1f)" % arrived)
     for k in list(af["habit"]):
-        af["habit"][k] = round(max(0.0, af["habit"][k] - 0.02), 3)
+        af["habit"][k] = round(max(0.0, af["habit"][k] - 0.02 / fade), 3)
         if af["habit"][k] == 0:
             del af["habit"][k]
     af["pressure"] = [round(x * 0.98, 3) for x in af["pressure"]]
@@ -2554,6 +3054,14 @@ _EVENT_SHAPE = {"kindness": "a kindness", "rescue": "being pulled out of it", "g
                 "loss": "someone gone", "code-broken": "a line crossed", "fell-ill": "being ill",
                 "intoxicated": "a night drinking", "reunion": "someone come back", "joy": "a good hour",
                 "witnessed": "what they saw"}
+STRAY = ["an old kitchen, the light in it", "whether they left something on", "the price of something they don't need",
+         "a dream from last week", "a stain on a sleeve", "a word that sounds wrong if you repeat it",
+         "how many steps there are somewhere", "a dog barking a long way off", "someone's handwriting",
+         "the taste of something from childhood", "a chair that wobbles", "an itch", "a name they can't place",
+         "the shape of a cloud, or a crack in a wall", "what day it is", "a story someone told badly",
+         "nothing at all, for a moment", "a rhyme that doesn't mean anything", "the back of someone's neck",
+         "an errand for tomorrow", "a hat", "boiled vegetables", "the sound a door makes", "three, for no reason",
+         "whether fish sleep", "a pair of shoes they used to own", "rain on a different roof", "the word 'parsley'"]
 _BODY_SHAPE = {"Survival": "hunger", "Safety": "a door at their back", "Means": "money", "Comfort": "sleep"}
 
 
@@ -2591,15 +3099,15 @@ def _draw_sources(n, ctx):
     lv[0] = "w"
     dr = n.get("drive", {})
     if dr.get("rung"):
-        add(dr["text"], 0.8 + 0.8 * deficit(n["needs"]["state"][dr["rung"]]))
+        add(dr["text"], 0.5 + 0.4 * deficit(n["needs"]["state"][dr["rung"]]))
     for cp in n.get("compulsions", []):
-        add(cp["urge"], 0.5 + cp.get("pressure", 0))
+        add(cp["urge"], min(2.0, 0.4 + 0.5 * cp.get("pressure", 0)))
     for k, r in (n.get("inclinations") or {}).items():
-        add(k.lower(), 1.5 * r["strength"])
+        add(k.lower(), 1.0 * r["strength"])
     for code in n.get("codes", []):
         add(code["code"], 0.3)
     if n.get("core") and n["core"] != n["axes"]:
-        add("how they used to be", 0.8)
+        add("how they used to be", 0.5)
     lv[0] = "q"
     for q in n.get("quirks", []):
         add(q, 0.3)
@@ -2633,6 +3141,13 @@ def _draw_sources(n, ctx):
     lv[0] = "z"
     for drift in random.sample(DRIFT, 3):
         add(drift, 0.5)
+    lv[0] = "n"
+    for stray in random.sample(STRAY, 4):
+        add(stray, 1.5)
+    lv[0] = "f"
+    rr = [r for r in RUNGS if r != dr.get("rung")]
+    pool_ = DRIVES[random.choice(rr)][random.randint(0, 1)]
+    add(fill(random.choice(pool_), n, None).replace("{tie}", "someone"), 0.45)
     return src
 
 
@@ -3238,6 +3753,14 @@ def main():
     x.set_defaults(f=cmd_tie)
     x = sp.add_parser("tide"); x.add_argument("world"); x.add_argument("--dials"); x.set_defaults(f=cmd_tide)
     x = sp.add_parser("audit"); x.set_defaults(f=cmd_audit)
+    x = sp.add_parser("learn"); x.add_argument("file"); x.add_argument("--subject", required=True)
+    x.add_argument("--claim", required=True); x.add_argument("--source", required=True, choices=list(SOURCE_BASE))
+    x.add_argument("--from", dest="source_name"); x.add_argument("--reliability", type=float); x.add_argument("--fact")
+    x.add_argument("--secret", action="store_true"); x.add_argument("--stressed", action="store_true")
+    x.set_defaults(f=cmd_learn)
+    x = sp.add_parser("tell"); x.add_argument("teller"); x.add_argument("hearer"); x.add_argument("--about", required=True)
+    x.set_defaults(f=cmd_tell)
+    x = sp.add_parser("beliefs"); x.add_argument("file"); x.add_argument("--about"); x.set_defaults(f=cmd_beliefs)
     x = sp.add_parser("habit"); x.add_argument("file"); x.add_argument("act")
     x.add_argument("--times", type=int, default=1); x.set_defaults(f=cmd_habit)
     x = sp.add_parser("styles"); x.set_defaults(f=cmd_styles)
