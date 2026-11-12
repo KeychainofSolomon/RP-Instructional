@@ -663,7 +663,7 @@ def cmd_circle(a):
         n["blend"] = "Members"
         n["needs"]["weight"] = {r: clamp(rnd(sum(m["needs"]["weight"][r] for m in ms) / len(ms)), 0, 3) for r in RUNGS}
         creeds = [m["creed"] for m in ms]
-        n["creed"] = max(set(creeds), key=creeds.count)
+        n["creed"] = max(sorted(set(creeds)), key=creeds.count)  # sorted: ties break the same way every run
         n["members"] = [m["name"] for m in ms]
         derive(n)
         show(n)
@@ -1671,8 +1671,10 @@ def sure_word(c):
         "unsure" if c >= 0.25 else "half-believes it"
 
 
-def _meaning(n, rng):
+def _meaning(n, rng, source=None):
     keys = sorted(MEANINGS)
+    if source in ("witnessed", "inferred", "imagined"):
+        keys = [k for k in keys if k != "a_lie"]   # nobody takes their own eyes or reasoning for someone else's lie
     w = []
     for k in keys:
         _, axw, styles = MEANINGS[k]
@@ -1695,6 +1697,9 @@ def learn_belief(n, subject, claim, source, frm=None, reliability=None, fact=Non
                  distortions=None, hops=0, rng=None):
     """Add what someone has come to believe. Returns the belief as they hold it."""
     rng = rng or random
+    subject, claim = (subject or "").strip(), (claim or "").strip()
+    if not subject or not claim:
+        sys.exit("A belief needs something it's about and something it claims.")
     if source not in SOURCE_BASE:
         sys.exit("A belief comes from one of: " + ", ".join(SOURCE_BASE))
     if reliability is None:
@@ -1719,7 +1724,7 @@ def learn_belief(n, subject, claim, source, frm=None, reliability=None, fact=Non
         return b
     b = {"k": "b%08x" % rng.getrandbits(32), "subject": subject, "claim": claim, "source": source, "from": frm,
          "also_from": [], "day": n["day"], "last": n["day"], "confidence": round(clamp(conf, 0.05, 0.98), 3),
-         "reliability": round(reliability, 2), "meaning": _meaning(n, rng), "distortions": dist, "hops": hops,
+         "reliability": round(reliability, 2), "meaning": _meaning(n, rng, source), "distortions": dist, "hops": hops,
          "fact": fact, "secret": bool(secret), "reinforced": 0}
     kb.append(b)
     n["knows"] = kb[-200:]
@@ -2603,7 +2608,11 @@ def cmd_event(a):
             st["Safety"] = clamp(st["Safety"] + 1, -2, 1)
             notes.append("an enemy gone: no grief; whatever they show, they show plainly")
         else:
-            base, spread = GRIEF_DAYS.get(role or "kin", (7, 7))
+            if cls == "stranger":
+                notes.append("a death they know of, not a grief of their own; sobered for a while, no more")
+                base, spread = 0, 0
+            else:
+                base, spread = GRIEF_DAYS.get(role or "kin", (7, 7))
             days = base + (d(spread) if spread else 0)
             days = max(1, int(round(days * tempo_of(n)["grief"] * random.lognormvariate(0, 0.25)))) if days else 0
             if role in ("mentor", "spiritual", "symbol"):
