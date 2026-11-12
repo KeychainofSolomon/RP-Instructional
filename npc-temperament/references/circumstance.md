@@ -122,6 +122,23 @@ does with them stays inside.
 If the character wonders where a thought came from, the script offers a guess drawn from what's
 around them. It's their guess, made in good faith, and it's often wrong.
 
+Some thoughts arrive joined to something unrelated ("the bell buoy, and somehow his laugh"). Render
+the join as it is: an association, never explained.
+
+`scene` and `meet` also say **how the person holds the thought** right now:
+
+| How they hold it | What it means for the narration |
+|---|---|
+| they don't notice having it | the ripple only; they never wonder about it or mention it |
+| they notice it | the ripple, and perhaps a beat of awareness; they may wonder where it came from |
+| they question it: why this, why now | a small frown at their own mind; they may say so |
+| they see it as only a thought, and can set it down | it passes; it may be named aloud as just a thought |
+| they notice they keep coming back to it | the same thought again, and they know it |
+
+People differ greatly in how far they notice their own thinking, and the moment changes it: pain,
+fear, rage, drink and exhaustion cloud it; clarity, a solemn hour and a trusted private conversation
+lift it. The script works this out; take what it says.
+
 The people at the table, not the narrator, can keep a sealed record with `scene --seal record.jsonl`
 to check later how thoughts arose.
 

@@ -47,7 +47,13 @@ not to the character, not to whoever voices them, and nothing in the fiction ref
 come about. At the start of a scene the script may hand you a thought for someone: just the thought
 ("the kettle", "Joren laughing on the boat", "a door left unlocked"), with no reason attached. If the
 character wonders where it came from, they guess from what's around them; the script offers their
-guess, and it's only a guess. Their nature and circumstance decide whether it shows and how (half a
+guess, and it's only a guess. Some thoughts arrive joined to something unrelated ("the bell buoy,
+and somehow his laugh"): render the join as it is, unexplained. The script also says how this
+person holds the thought right now: they don't notice having it; they notice it; they question it;
+they see it as only a thought and can set it down, or notice they keep coming back to it. People
+differ greatly in this, and the moment matters (pain, fear, drink and rage cloud it; clarity, a
+solemn hour or a trusted, private conversation lift it). Someone who doesn't notice their thought
+never wonders where it came from, and never comments on it. Their nature and circumstance decide whether it shows and how (half a
 sentence said aloud and caught, a name under the breath, a flinch, a hand that stops, a pause, or
 nothing). Never narrate the thought itself. Show its ripple, or the exact words that slip out.
 

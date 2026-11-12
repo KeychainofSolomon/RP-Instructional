@@ -1282,10 +1282,16 @@ def cmd_meet(a):
     if vstyle != td["voice"]:
         print("The circumstance calls their %s side forward." % vstyle)
     if td.get("thought"):
-        th = td["thought"] if isinstance(td["thought"], list) else [td["thought"], None]
-        print("Unbidden thought: %s. It shows as: %s. Never name it in narration; show only that, or the words "
-              "they let slip. If they wonder where it came from, their own guess: %s." % (
-                  th[0], thought_ripple(n, active), th[1] or "nothing they can name"))
+        th = td["thought"] if isinstance(td["thought"], list) else [td["thought"], None, False, 0.5]
+        th = list(th) + [False, 0.5][len(th) - 2:] if len(th) < 4 else th
+        lvl, hold = thought_hold(n, th, active)
+        rip = thought_ripple(n, active)
+        if rip != "nothing shows" and lvl >= 2:
+            rip += {2: "; a small frown at their own mind", 3: "; then it's set down"}[lvl]
+        print("Unbidden thought: %s. How they hold it now: %s. It shows as: %s. Never name it in narration; "
+              "show only that, or the words they let slip.%s" % (
+                  th[0], hold, rip, (" If they wonder where it came from, their own guess: %s."
+                                     % (th[1] or "nothing they can name")) if lvl >= 1 else ""))
     if form in FORM_TAGS and not form.startswith("Wounded") and not a.dry_run:
         axes_ = [ax for tg in FORM_TAGS[form] for ax in TAG_AXES.get(tg, [])]
         for note in incline(n, form, axes_):
@@ -1562,6 +1568,24 @@ def cmd_audit(a):
                           "the danger in the room")
             if text_.lower().startswith(old_labels) or not text_.strip():
                 problems.append("a thought carries a label or is empty: %r" % text_)
+    def _m(axes, styles, active, clarity=0.0):
+        q = build(list(DEFAULT_DIALS)); q["axes"] = axes; q["voices"] = [{"style": s_, "frac": 1.0 / len(styles),
+                                                                           "manner": voice_manner(SBY[s_])} for s_ in styles]
+        q["authenticity"] = {"kind": "Genuine", "faces": []}; q["inclinations"] = {"clarity": {"strength": clarity, "count": 1, "last": 0}}
+        derive(q)
+        lv = [thought_hold(q, ["x", None, False, k / 20.0], active)[0] for k in range(21)]
+        return sum(lv) / 21.0, q
+    low, _ = _m([0, 2, 1, 0, -2, -2, 1], ["Adventurous", "Dramatic"], [])
+    high, hq = _m([1, -1, 0, 1, 2, 3, 0], ["Visionary", "Serious"], [])
+    hurt_, _ = _m([1, -1, 0, 1, 2, 3, 0], ["Visionary", "Serious"], ["hurt"])
+    clear_, _ = _m([0, 1, 0, 0, 0, 0, 0], ["Leisurely"], ["clear"])
+    plain_, _ = _m([0, 1, 0, 0, 0, 0, 0], ["Leisurely"], [])
+    if not low < high: problems.append("reflective natures do not notice their thoughts more than impulsive ones")
+    if not hurt_ < high: problems.append("pain does not cloud how a thought is held")
+    if not clear_ > plain_: problems.append("clarity does not lift how a thought is held")
+    lat_lo = _lateral_chance(_m([0, 0, 0, 0, 0, -3, 0], ["Conscientious"], [])[1])
+    lat_hi = _lateral_chance(hq)
+    if not lat_lo < lat_hi: problems.append("open, visionary minds do not leap sideways more often")
     if len(seeds_seen) < 8:
         problems.append("thoughts draw from too few levels: %s" % sorted(seeds_seen))
     if not (15 <= arisen / 40.0 <= 35):
@@ -1752,8 +1776,10 @@ def cmd_scene(a):
             n["today"]["thought"] = list(th) if th else None
             save(n, path)
         if th:
-            print("A thought arises in %s: %s. If they wonder where it came from, their own guess: %s."
-                  % (n["name"], th[0], th[1] or "nothing they can name"))
+            lvl, hold = thought_hold(n, th, [])
+            print("A thought arises in %s: %s. Left to itself, %s.%s" % (
+                n["name"], th[0], hold, (" If they wonder where it came from, their own guess: %s."
+                                          % (th[1] or "nothing they can name")) if lvl >= 1 else ""))
     r = d(100)
     if r == 100:
         pool = ODD_PLAIN + (ODD_UNCANNY if dial(dials, "X") >= 2 else [])
@@ -2216,6 +2242,50 @@ def _draw(n, ctx):
     return text, guess, g
 
 
+_LATERAL_STYLE = {"Visionary": 0.15, "Dramatic": 0.05, "Adventurous": 0.05, "Mercurial": 0.05, "Schemer": 0.04}
+_META_STYLE = {"Visionary": 0.6, "Serious": 0.4, "Solitary": 0.4, "Conscientious": 0.3, "Self-Made": 0.3,
+               "Benevolent": 0.2, "Zealot": -0.2, "Adventurous": -0.4, "Dramatic": -0.3, "Mercurial": -0.3,
+               "Leisurely": -0.2, "Commanding": -0.1, "Predator": 0.2, "Professional": 0.1}
+_META_PROC = {"Intellectual": 0.5, "Devotional": 0.3, "Contained": 0.2, "Caretaking": 0.0, "Action": -0.3,
+              "Expressive": -0.3, "Numb": -0.2, "Bargaining": -0.4, "Performed": -1.0}
+_META_CIRC = {"clear": 1.5, "solemn": 0.3, "intimate": 0.2, "hurt": -2.0, "frozen": -2.0, "afraid": -1.5,
+              "enraged": -1.5, "stunned": -1.0, "intoxicated": -1.0, "exhausted": -0.7, "sick": -0.5,
+              "grieving": -0.3, "festive": -0.3, "tending": -0.8, "protecting": -0.8}
+HOLD = {0: "they don't notice having it", 1: "they notice it", 2: "they question it: why this, why now",
+        3: "they see it as only a thought, and can set it down"}
+HOLD_AGAIN = "they notice they keep coming back to it"
+
+
+def _lateral_chance(n):
+    a = n["axes"]
+    p_ = 0.10 + 0.06 * a[O] + sum(_LATERAL_STYLE.get(v["style"], 0) * v["frac"] for v in n["voices"])
+    if (n.get("afflictions") or {}).get("intoxicated"): p_ += 0.10
+    if (n.get("affect") or {}).get("feeling", 0) >= 3: p_ += 0.05
+    if (n.get("affect") or {}).get("clarity_days"): p_ += 0.05
+    return clamp(p_, 0.02, 0.45)
+
+
+def _meta_capacity(n, active):
+    a = n["axes"]
+    cap = 1.0 + 0.4 * a[O] + 0.3 * a[D] - 0.3 * max(0, a[V])
+    cap += sum(_META_STYLE.get(v["style"], 0) * v["frac"] for v in n["voices"])
+    cap += _META_PROC.get(processing(n), 0)
+    cap += 1.5 * (n.get("inclinations") or {}).get("clarity", {}).get("strength", 0.0)
+    cap += 0.2 * min(2, (n.get("affect") or {}).get("clarity_count", 0))
+    cap += sum(_META_CIRC.get(c, 0) for c in active)
+    return cap
+
+
+def thought_hold(n, thought, active):
+    """How this person holds this thought, now. Deterministic given the roll made when it arose."""
+    u = thought[3] if len(thought) > 3 and thought[3] is not None else 0.5
+    z = _meta_capacity(n, active) + (u - 0.5) * 2.0
+    lvl = 0 if z < 1.0 else 1 if z < 2.0 else 2 if z < 3.0 else 3
+    if lvl >= 2 and thought[2]:
+        return lvl, HOLD_AGAIN
+    return lvl, HOLD[lvl]
+
+
 def arise_thought(n, pl=None, ctx=None, sealed=None):
     """Whether a thought arises, and what it is. Returns (thought, what they might blame it on) or None.
     The thought carries no trace of where it came from."""
@@ -2225,10 +2295,24 @@ def arise_thought(n, pl=None, ctx=None, sealed=None):
     if pl is not None:
         ctx.setdefault("place", pl)
     text, guess, g = _draw(n, ctx)
+    leap = None
+    if random.random() < _lateral_chance(n):
+        for _ in range(6):
+            t2, g2_guess, g2 = _draw(n, ctx)
+            if g2 != g and t2 != text:
+                leap = (t2, g2)
+                text = "%s, and somehow %s" % (text, t2)
+                guess = guess or g2_guess
+                break
+    recent = n.setdefault("recent_thoughts", [])
+    again = text in recent
+    n["recent_thoughts"] = (recent + [text])[-6:]
+    u = random.random()
     if sealed:
         with open(sealed, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"day": n["day"], "name": n["name"], "thought": text, "from": g}) + "\n")
-    return text, guess
+            fh.write(json.dumps({"day": n["day"], "name": n["name"], "thought": text, "from": g,
+                                 "joined_with": leap[1] if leap else None, "roll": round(u, 3)}) + "\n")
+    return text, guess, again, u
 # ====================================== END SEALED ======================================
 
 

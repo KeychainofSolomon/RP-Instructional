@@ -23,8 +23,12 @@ It is built on three laws:
    the prose itself). It hands over only the thought, never where it came from: the character
    doesn't know the box exists, and neither does whoever voices them, since the skill's own docs
    describe only how to use a thought, and the workings sit in a sealed part of the script the
-   narrator is told not to read. The table can keep a sealed record to check it later. Thoughts
-   show only as ripples: a pause, a name under the breath, half a sentence caught too late.
+   narrator is told not to read. The table can keep a sealed record to check it later. Some
+   thoughts leap sideways, joined to something unrelated. People differ in how far they notice
+   their own thinking (from not at all, to questioning it, to seeing a thought as only a
+   thought), by temperament, traits, processing and any clarity they've known, and the moment
+   moves it: pain, fear, rage and drink cloud it, clarity and quiet lift it. Thoughts show only as
+   ripples: a pause, a name under the breath, half a sentence caught too late.
 3. **No quests without a drive.** NPCs rarely ask strangers for anything. A request for help
    only happens when five conditions line up, and even then the outsider can usually do only
    part of it.
