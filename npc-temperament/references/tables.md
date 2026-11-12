@@ -36,6 +36,10 @@ Kind (d14): 1 kin · 2 lover · 3 friend · 4 mentor · 5 rival · 6 enemy · 7 
 Each tie has **Loyalty** (d6: 1 a small favour … 6 would die for it) and **Reach** (d6: how
 much it can do in the world). Name the tie when the story needs it, then keep the name.
 
+Kin ties are given a face from the character's family (life.md): their younger sister, their
+father. The relative they hold dearest is added as a tie if not already one, and a pet, if they
+keep one, is a tie of its own.
+
 Enemies have what they would do (d6): 1 avoid them · 2 speak against them · 3 work against
 them quietly · 4 hurt someone they love · 5 hurt them · 6 see them dead.
 

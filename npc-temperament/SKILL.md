@@ -26,6 +26,8 @@ References (read when needed):
 - `references/time.md` — memory, trust, slow change, tides.
 - `references/circumstance.md` — how hurt, fear, grief, drink, rank, ritual and more amend the
   way a person comes across; the amendment review required before adding anything.
+- `references/life.md` — family, likes and dislikes, pets, outlook on the unseen; how far each
+  person strays from their own grain; grief by bond.
 - `references/affect.md` — pain, elation and clarity; getting used to things; inclinations and
   habits; how traits change against the anchor of who someone is.
 - `references/speech.md` — 25 ways of talking, slang mechanisms, honest and manipulative speech.
@@ -151,8 +153,12 @@ should feel different before anyone speaks. Dials drift over time (time.md).
 5. **Needs.** Two ladders, physical and spiritual, each rung with a personal weight and state.
    Most people hit the lower rungs first; some are inverted, fixated or numb.
 6. **Drive, creed, codes and compulsions, contradiction, quirk, danger history.**
+7. **Life.** How idiosyncratic they are; a whole family (members, bonds, why cold bonds went
+   cold, the one they hold dearest); likes and dislikes that stand apart from temperament, some
+   against their grain; a pet for 0–14% (exotic for 0–10% of those); an outlook on the unseen
+   (what is ultimately so, what follows death, what it is for to them, practice, certainty).
 
-Details: personality.md and needs.md. Script: `forge.py npc --save name.json`.
+Details: personality.md, needs.md and life.md. Script: `forge.py npc --save name.json`.
 
 ## Each day (per character, per in-world day)
 
@@ -382,6 +388,10 @@ python scripts/forge.py place yard.json --name "The yard" --add "sound:the pump"
 python scripts/forge.py tie maren.json --to "Bram" --role sibling --loyalty 5
 python scripts/forge.py violence maren.json bram.json --place yard.json --victim "Bram" --attacker player --hurt "Bram"
 python scripts/forge.py event maren.json loss --about "Bram"
+python scripts/forge.py event maren.json loss --about "their mother"
+python scripts/forge.py meet maren.json --taste "rain" --spirit scorned
+python scripts/forge.py tie maren.json --to "Biscuit" --role pet
+python scripts/forge.py audit --life
 python scripts/forge.py tide world.json
 python scripts/forge.py styles
 ```

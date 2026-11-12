@@ -65,6 +65,22 @@ It is built on three laws:
 - **Ties.** Family, lovers, mentors, rivals, enemies, masters, causes, places and objects,
   each with loyalty and reach. Ties can name a specific person, so relationships between
   characters are real.
+- **A whole family.** Parents, siblings with birth order, a partner, children, living or dead,
+  each with a bond (close to estranged). Cold bonds have a cause and a direction: parents who
+  walked out or only turn up for money, siblings who took the inheritance, children who left
+  and won't say why. There's the one relative they hold dearest, who raised them, where they
+  live, what was handed down, and sometimes a family wound.
+- **Tastes of their own.** Likes and dislikes that stand apart from temperament. How
+  consistent someone is varies by person: some are all of a piece, others are riddled with
+  contradictions (tastes against their grain, loving the sea and hating boats, the one warm
+  sister in an estranged family).
+- **Pets.** 0–14% keep one, more among the warm and the well-off, fewer in hard times; of
+  those, 0–10% something exotic. A pet is a charge: harm to it matters, and its loss is a grief.
+- **An outlook on the unseen**, with no gods named: what they hold is ultimately so (an
+  everlasting self, chance, nothing after death, or never thought about it), what follows
+  death, what belief is for to them (themselves, others, their people, no line between self and
+  other, a bargain, unnamed), how they practise, how sure they are, and how they treat other
+  people's beliefs.
 
 ### Every reaction has a cause
 - **Their day.** Each in-world day rolls what happened to them, drawn from their own needs,
@@ -214,7 +230,7 @@ His grief arrives two days later. The warming room keeps a pale patch of scrubbe
 | `affinity` | How two characters regard each other. |
 | `status` | Dead, comatose, amnesiac, or back to present. |
 | `tide` | Move the world a week on. |
-| `audit` | Check every combination in the system (see below). |
+| `audit` | Check every combination in the system (see below); `--life` checks family, tastes, pets and outlook alone. |
 | `styles`, `roll` | Reference tables; plain dice. |
 
 ## How it's tested
@@ -229,6 +245,12 @@ His grief arrives two days later. The warming room keeps a pale patch of scrubbe
   - habits grow by less each time, fade, and become exactly one compulsion;
   - a habit never breaks through a circumstance;
   - clarity never comes from pain alone and stays within its margin.
+
+  - family, tastes, pets and outlook across 800 people in five kinds of world (3,000 with
+    `--life`): no impossible households, no estranged relative treated as beloved, no devout
+    belief in nothing, pet and exotic rates within their ranges, the same life every time an
+    old ledger is loaded, and grief that follows the bond (never short for a loved child; none
+    at all only where the bond was estranged).
 
   Anything new added to the system must pass it before use.
 - **Simulated campaigns:** 30 characters over 180 in-world days through every command and option
@@ -255,6 +277,7 @@ npc-temperament/
     ├── personality.md          traits, voices, the 20 styles, forms, masks
     ├── needs.md                the two ladders, days, drives
     ├── interaction.md          approaches, creeds, rooms, circles, conflict, relationships
+    ├── life.md                 family, tastes, pets, outlook on the unseen, grief by bond
     ├── circumstance.md         the 19 circumstances and the amendment review
     ├── affect.md               pain, elation, clarity, habits, change against the anchor
     ├── violence.md             registers, language, dissonance, responses

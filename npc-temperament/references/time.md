@@ -93,7 +93,9 @@ continuity.
 Some states outlast the moment and are tracked on the ledger: grief (its length set by who was
 lost: a child 22–35 days, a spouse or lover 15–28, a parent, sibling, dependant or spiritual
 guide 11–20, kin, friend, mentor or symbol 8–14, a comrade or superior a few days, a rival 1–4,
-an enemy none; the numb grieve 1–3 days late),
+an enemy none, a pet 5–11; then stretched or shortened by their own pace and by how they felt
+about who was lost, as a range rolled each time: never short for a child they loved, none at
+all only where the bond was estranged; life.md; the numb grieve 1–3 days late),
 sickness (2–4 days after falling ill), intoxication (the rest of the day), and being shaken by
 violence (the rest of that day). They tick down with each day roll and amend how the person
 comes across while they last (circumstance.md).

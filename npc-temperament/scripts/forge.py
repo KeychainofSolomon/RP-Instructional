@@ -148,7 +148,7 @@ COMPULSIONS = ["greed", "gambling", "lust", "cruelty", "jealousy", "lying", "cur
                "cleanliness and order", "a substance", "vengeance", "collecting",
                "can't back down"]
 
-RUNG_TIES = {"Survival": ["dependant", "kin"], "Safety": ["enemy"],
+RUNG_TIES = {"Survival": ["dependant", "kin", "pet"], "Safety": ["enemy"],
              "Means": ["creditor", "master"], "Comfort": ["place"],
              "Belonging": ["kin", "lover", "friend", "group", "dependant"],
              "Standing": ["group", "rival", "master"], "Selfhood": ["master", "rival", "mentor", "group"],
@@ -501,6 +501,7 @@ def build(dials, name=None, kind="person"):
     speech_build(n, random.Random(random.random()))
     strain_build(n, random.Random(random.random()))
     tempo_build(n, random.Random(random.random()))
+    life_build(n, random.Random("life:%s" % n["id"]), add_ties=True)   # own dice: the rest of the build is untouched
     return n
 
 
@@ -618,6 +619,7 @@ def show(n):
     print("Contradiction: %s at %s | Quirk: %s" % (co["pair"], co["ratio"], "; ".join(n["quirks"])))
     if n["scars"]:
         print("Danger history: " + ", ".join("%s (%+d, %s)" % (k, v["dir"], v["form"]) for k, v in n["scars"].items()))
+    show_life(n)
 
 
 def fmt_frac(f):
@@ -704,6 +706,10 @@ def cmd_day(a):
         fresh = [c for c in pool if c not in n["recent_causes"]] or pool
         cause = fill(random.choice(fresh), n, rung)
         n["recent_causes"] = (n["recent_causes"] + [c for c in pool if fill(c, n, rung) == cause][:1])[-7:]
+        if rung == "Comfort" and cause in ("indulged a pleasure", "went without a small pleasure they rely on"):
+            likes = [t["thing"] for t in life_of(n)["tastes"] if t["side"] == "like" and t["cat"] in PLEASURE_CATS]
+            if likes:
+                cause += ": " + random.choice(likes)
         st[rung] = clamp(st[rung] + (1 if val > 0 else -1) * abs(val), -2, 1)
     if cause.startswith("fell sick"):
         af["sick"] = d(3) + 1
@@ -1582,7 +1588,7 @@ def ordinary_beats(n, active, rng=None):
 
 
 # ---------- schema and identity ----------
-SCHEMA = 3
+SCHEMA = 4
 
 
 def new_id(rng=None):
@@ -1624,6 +1630,891 @@ def resurface(n):
     return None
 
 
+
+# ---------- life: family, tastes, pets, outlook on the unseen ----------
+# Four layers that stand beside temperament rather than flowing from it. People are not
+# internally consistent: how far each one strays from their own grain is itself rolled.
+IDIO = ["Consistent", "Ordinary", "Marked", "Riddled"]
+IDIO_WORD = {"Consistent": "all of a piece; what they like suits who they are",
+             "Ordinary": "mostly of a piece, with the usual odd corner",
+             "Marked": "full of corners; several tastes cut against their grain",
+             "Riddled": "a bundle of contradictions; little about them predicts the rest"}
+
+FAMILY_FEEL = ["Close", "Dutiful", "Strained", "Scattered", "Estranged", "Broken"]
+BONDS = ["close", "fond", "dutiful", "distant", "strained", "estranged"]
+BOND_MIX = {"Close": (50, 35, 10, 0, 5, 0), "Dutiful": (10, 25, 50, 0, 15, 0),
+            "Strained": (0, 15, 25, 0, 45, 15), "Scattered": (5, 25, 20, 40, 10, 0),
+            "Estranged": (0, 10, 0, 5, 30, 55), "Broken": (15, 15, 0, 0, 30, 40)}
+BOND_LOYALTY = {"close": 5, "fond": 4, "dutiful": 3, "distant": 2, "strained": 2, "estranged": 1}
+FLIP = {"close": "estranged", "fond": "strained", "dutiful": "close", "distant": "close",
+        "strained": "close", "estranged": "close"}
+FAMILY_ROLES = ("parent", "sibling", "spouse", "child", "kin")
+RAISED_BY = ["a grandparent", "an aunt", "an uncle", "strangers who took them in", "a house of charity or an order",
+             "the street, mostly", "whoever would have them"]
+HANDED_DOWN = ["a saying they repeat without noticing", "their trade", "a grudge against another family",
+               "a recipe no one else may cook", "a name to live up to", "an old debt", "an heirloom they won't sell",
+               "a silence about something", "a song", "a way of praying or of refusing to", "a temper",
+               "a gift for numbers", "a house, or the claim to one", "a family enemy", "their hands: the same scars, the same skill"]
+# (text, requirement on the family, effect)
+WOUNDS = [("a death no one speaks of", None, None),
+          ("a quarrel over an inheritance", None, None),
+          ("a sibling who left and never wrote", "sibling", "distant"),
+          ("a parent's temper", "parent", None),
+          ("a parent's drinking", "parent", None),
+          ("a child who turned against them", "child", "estranged"),
+          ("a marriage made for money, not love", "spouse", None),
+          ("a family shamed in public, long ago", None, None),
+          ("a debt that ruined them once", None, None),
+          ("a doubt about who their real father is", None, None),
+          ("a favourite who wasn't them", "sibling", None),
+          ("a home lost", None, None)]
+# why a bond went cold: (text, who walked away). "them" = the relative left; "self" = they did; "both"/"none"
+COLD_WHY = {
+ "parent": [("walked out when they were small and never came back", "them"),
+            ("was never there: no money, no visits, only promises", "them"),
+            ("drank or gambled everything away", "them"), ("chose a new family over them", "them"),
+            ("only turns up when they want something", "them"), ("was cruel to them as a child", "them"),
+            ("they cut off for good after one last broken promise", "self"),
+            ("disowned them over who they married or what they became", "them"),
+            ("a quarrel neither will be first to mend", "both"), ("they simply drifted; no one wrote", "none")],
+ "sibling": [("took the inheritance and left nothing", "them"), ("was always the favourite and let them know it", "them"),
+             ("they left home and never looked back", "self"), ("a quarrel over a parent's care", "both"),
+             ("sided with someone against them", "them"), ("borrowed money and vanished", "them"),
+             ("they simply drifted; no one wrote", "none")],
+ "spouse": [("left them for someone else", "them"), ("they left, and don't regret it", "self"),
+            ("years of small cruelties, on both sides", "both"), ("never home, then not at all", "them"),
+            ("the children, and who keeps them", "both"), ("money, always money", "both")],
+ "child": [("left and won't say why", "them"), ("blames them for how they were raised", "them"),
+           ("married into a family they despise", "both"), ("they threw them out, years ago", "self"),
+           ("took up a life they can't forgive", "both"), ("only writes to ask for money", "them"),
+           ("they simply drifted; no one wrote", "none")],
+}
+PLACE_IN_FAMILY = ["the responsible one", "the favourite", "the black sheep", "the peacemaker", "the provider",
+                   "the one who left", "the forgotten one", "the heir", "the baby of the family", "the clever one",
+                   "the disappointment", "the one everyone confides in"]
+
+# Tastes stand apart from temperament. Each: (thing, category, lean). A lean (axis, sign) means
+# the thing naturally suits people far toward that end; liking it from the other end is against
+# the grain. Categories: sense, food, people, pastime, thing.
+TASTES = [
+ ("rain on a roof", "sense", None), ("the smell of smoke", "sense", None), ("bells", "sense", None),
+ ("silence", "sense", (E, -1)), ("loud music", "sense", (E, 1)), ("bright colours", "sense", (E, 1)),
+ ("the colour yellow", "sense", None), ("the cold", "sense", None), ("hot weather", "sense", None),
+ ("wind", "sense", None), ("fog", "sense", None), ("the dark", "sense", None),
+ ("early mornings", "sense", (D, 1)), ("late nights", "sense", (D, -1)), ("the sound of chewing", "sense", None),
+ ("rough cloth against the skin", "sense", None), ("strong perfume", "sense", None), ("birdsong", "sense", None),
+ ("sweet things", "food", None), ("bitter drinks", "food", None), ("fiery spice", "food", (O, 1)),
+ ("plain food", "food", (O, -1)), ("fish", "food", None), ("raw onion", "food", None), ("anything fried", "food", None),
+ ("fruit", "food", None), ("salty food", "food", None), ("milk", "food", None), ("eggs", "food", None),
+ ("food they've never tried", "food", (O, 1)), ("eating the same meal every day", "food", (O, -1)),
+ ("loud laughter", "people", (E, 1)), ("being touched", "people", (W, 1)), ("small talk", "people", (W, 1)),
+ ("children", "people", (W, 1)), ("the very old", "people", None), ("people who are late", "people", (D, -1)),
+ ("people who stand too close", "people", (W, 1)), ("gossip", "people", None), ("being watched while eating", "people", None),
+ ("crowds", "people", (E, 1)), ("being alone", "people", (E, -1)), ("strangers", "people", (O, 1)),
+ ("people in uniform", "people", (M, 1)), ("being fussed over", "people", (M, -1)), ("being thanked", "people", None),
+ ("people who talk with their hands", "people", None), ("tears, theirs or anyone's", "people", (V, 1)),
+ ("games of chance", "pastime", (V, 1)), ("cards and board games", "pastime", None), ("mending things", "pastime", (D, 1)),
+ ("cleaning", "pastime", (D, 1)), ("walking at night", "pastime", None), ("dancing", "pastime", (E, 1)),
+ ("singing", "pastime", (E, 1)), ("old stories", "pastime", None), ("riddles and puzzles", "pastime", (O, 1)),
+ ("growing things", "pastime", None), ("cooking for others", "pastime", (W, 1)), ("long journeys", "pastime", (O, 1)),
+ ("routine", "pastime", (D, 1)), ("surprises", "pastime", (O, 1)), ("swimming", "pastime", None),
+ ("heights", "pastime", (V, -1)), ("animals", "pastime", (W, 1)), ("dogs", "thing", None), ("cats", "thing", None),
+ ("birds", "thing", None), ("old things", "thing", (O, -1)), ("new things", "thing", (O, 1)), ("the sea", "thing", None),
+ ("boats", "thing", None), ("the smell of old paper", "thing", None), ("mirrors", "thing", None),
+ ("ticking clocks", "thing", None), ("fire", "thing", None), ("candlelight", "thing", None), ("gardens", "thing", None),
+ ("cellars", "thing", None), ("markets", "thing", (E, 1)), ("holy places", "thing", None), ("graveyards", "thing", None),
+ ("small rooms", "thing", None), ("open sky", "thing", None), ("blood", "thing", (V, 1)), ("weapons", "thing", (M, 1)),
+ ("fine clothes", "thing", (M, 1)), ("dirt on their hands", "thing", (D, -1)),
+]
+TASTE_BY = {t[0]: t for t in TASTES}
+# loves one, can't stand its neighbour: the contradictions that make people people
+TASTE_PAIRS = [("the sea", "boats"), ("children", "the noise children make"), ("dancing", "being watched"),
+               ("animals", "the smell of animals"), ("cooking for others", "eating in front of others"),
+               ("old stories", "being told how things were"), ("fire", "the smell of smoke"),
+               ("singing", "their own voice"), ("markets", "haggling"), ("gardens", "insects"),
+               ("holy places", "the people who keep them"), ("being alone", "silence")]
+TASTE_STRENGTH = {"like": ["likes", "loves", "delights in"], "dislike": ["dislikes", "can't stand", "loathes"]}
+PLEASURE_CATS = ("sense", "food", "pastime", "thing")
+
+PET_COMMON = ["a dog", "a cat", "a caged songbird", "a rabbit", "a hen that follows them about",
+              "a goat they will never eat", "an old mule or pony", "a pair of doves", "fish in a bowl", "a tame rat"]
+PET_EXOTIC = ["a snake", "a fox raised from a kit", "a tortoise older than they are", "a monkey", "a bird of prey",
+              "a lizard", "a spider kept in a jar", "a crow that knows a few words", "a parrot", "a hedgehog",
+              "a ferret", "a young boar"]
+PET_UNCANNY = ["an animal no one can quite name", "a cat that is sometimes not there", "a bird that never sings by day"]
+PET_WAY = ["dotes on it", "treats it as a working animal and nothing more", "talks to it more than to people",
+           "pretends not to care for it, and feeds it first", "keeps it for someone who is gone",
+           "lets it go where it likes", "is never seen without it"]
+
+# Outlook on the unseen, without naming any world's gods. Eleven views of how things ultimately are.
+VIEWS = {
+ "eternal": "the self is everlasting: it was before birth and will be after death",
+ "partial": "some things last forever (a first power, a maker, the order of things) and the rest of us pass",
+ "measure": "turns over whether the world has an edge, has none, has both or neither, and finds it matters",
+ "evasive": "won't say yes, won't say no, won't say both or neither; keeps every answer slippery",
+ "chance": "everything arose by chance, without cause or purpose",
+ "aware": "something of us goes on after death, aware",
+ "unaware": "something of us goes on after death, without awareness",
+ "between": "something goes on after death that is neither aware nor unaware",
+ "nothing": "death is the end; after it there is nothing",
+ "here": "whatever good there is must be found in this life, now",
+ "unexamined": "has never thought about it; holds what they were taught, or nothing",
+}
+AFTERLIFE = {
+ "none": "nothing; the end is the end", "aware": "goes on as themselves, aware",
+ "return": "comes back into another life", "join": "dissolves back into everything",
+ "judged": "is weighed by their deeds, then rewarded or punished", "sleep": "rests without dreams or knowing",
+ "lingers": "a faint trace lingers near where they lived", "unknown": "no idea, and it troubles them",
+ "shrug": "no idea, and it doesn't trouble them", "taught": "whatever they were taught; they haven't looked closely",
+}
+VIEW_AFTER = {"eternal": ("aware", "return", "join", "judged"), "partial": ("judged", "aware", "sleep", "lingers"),
+              "measure": ("return", "join", "unknown", "aware", "none"), "evasive": ("unknown", "shrug"),
+              "chance": ("none", "shrug"), "aware": ("aware", "judged", "return", "lingers"),
+              "unaware": ("sleep", "lingers"), "between": ("join", "lingers", "unknown"), "nothing": ("none",),
+              "here": ("none", "shrug", "unknown", "return"), "unexamined": ("taught", "shrug")}
+SPIRIT_FOR = {
+ "self": "for themselves: their own safety, reward or escape",
+ "others": "for others: so they can do right by people and ease what hurts",
+ "kin": "for their own people: family, household, those like them",
+ "one": "no line between themselves and anyone else to serve; it simply is",
+ "bargain": "a bargain with the unseen: they give, it gives back",
+ "unnamed": "lives it without a name for it, and won't take one",
+ "nothing": "nothing in particular; it is simply how things are",
+}
+PRACTICE = {"none": "no practice", "private": "small private habits", "observant": "keeps the observances",
+            "devout": "devout; it orders their days", "ascetic": "denies themselves for it",
+            "secret": "practises in secret", "outward": "goes through the motions for others to see"}
+CERTAINTY = ["doubting", "wavering", "settled", "unshakeable"]
+TOWARD = {"private": "keeps it to themselves", "tolerant": "lets others believe what they will",
+          "curious": "asks others what they hold, and listens", "persuades": "tries to bring others round",
+          "scornful": "has contempt for what others hold"}
+GRIEF_SPIRIT = {"none": "takes no comfort in what comes after; there is nothing to take",
+                "aware": "talks of seeing them again", "return": "watches newborns for them",
+                "join": "says they are everywhere now", "judged": "worries over how they will be weighed, or is sure they're safe",
+                "sleep": "is glad they are at rest", "lingers": "listens for them in the house",
+                "unknown": "doesn't know where they've gone, and that is the worst of it",
+                "shrug": "doesn't ask where they've gone", "taught": "reaches for the words they were taught"}
+SPIRIT_ODD = ["says death ends everything, yet leaves food out for the dead",
+              "keeps the observances and believes none of it", "prays only when no one could possibly hear",
+              "scorns all belief, but will not walk past a holy place without touching it",
+              "is certain of what comes after, and terrified of it anyway",
+              "believes everything is chance, and carries a charm", "talks to the dead, and denies doing it"]
+
+
+def _w(rng, items, weights):
+    tot = sum(weights)
+    if tot <= 0:
+        return items[0]
+    x = rng.uniform(0, tot)
+    for it, w in zip(items, weights):
+        x -= w
+        if x <= 0:
+            return it
+    return items[-1]
+
+
+def idio_of(n, rng=None):
+    if n.get("idio") not in IDIO:
+        rng = rng or random.Random("idio:%s" % n.get("id"))
+        k = _w(rng, IDIO, [15, 45, 30, 10])
+        fl = n.get("flags") or {}
+        if fl.get("outlier"):
+            k = "Riddled"
+        elif fl.get("complete") and k != "Riddled":
+            k = IDIO[IDIO.index(k) + 1]
+        n["idio"] = k
+    return n["idio"]
+
+
+def _gender(rng, f, m):
+    return f if rng.random() < 0.5 else m
+
+
+def family_build(n, rng, add_ties=False):
+    dials = n.get("dials") or DEFAULT_DIALS
+    risk = max(0, dial(dials, "S") - 1) + max(0, dial(dials, "V") - 1)
+    station = n.get("station")
+    w = [25, 25, 20, 12, 10, 8]
+    if station == "Unmoored":
+        w = [8, 10, 20, 27, 22, 13]
+    feel = _w(rng, FAMILY_FEEL, w)
+    idio = idio_of(n)
+    members = []
+
+    def bond():
+        return _w(rng, BONDS, BOND_MIX[feel])
+
+    def add(rel, role, label, alive):
+        m = {"rel": rel, "role": role, "label": label, "alive": alive, "bond": bond()}
+        members.append(m)
+        return m
+
+    for par, (f, mo) in (("mother", ("mother", "mother")), ("father", ("father", "father"))):
+        r = rng.random() * 100
+        dead = 37 + 5 * risk
+        if r < 8:
+            add(par, "parent", "the %s they never knew" % par, None)["bond"] = "distant"
+        elif r < 8 + dead:
+            add(par, "parent", "their late " + par, False)
+        else:
+            add(par, "parent", "their " + par, True)
+    nsib = _w(rng, list(range(7)), [18, 24, 22, 15, 10, 6, 5])
+    pos = rng.randint(0, nsib)          # how many come before them
+    twin = nsib >= 1 and rng.random() < 0.03
+    seen = {}
+    for i in range(nsib):
+        word = _gender(rng, "sister", "brother")
+        if twin and i == 0:
+            side = "twin"
+        else:
+            side = "elder" if i < pos else "younger"
+        base = "their %s %s" % (side, word) if side != "twin" else "their twin " + word
+        seen[base] = seen.get(base, 0) + 1
+        label = base if seen[base] == 1 else "%s (%d)" % (base, seen[base])
+        alive = rng.random() * 100 >= 8 + 3 * risk
+        add(word, "sibling", label if alive else label.replace("their ", "their late ", 1), alive)
+    order = "only child" if nsib == 0 else "twin" if twin else "eldest" if pos == 0 else "youngest" if pos == nsib else "middle"
+    pw = [38, 34, 10, 9, 9]
+    if station == "Sworn":
+        pw[0] += 30
+    partner = _w(rng, ["none", "spouse", "lover", "widowed", "separated"], pw)
+    lover_tie = next((t for t in n.get("ties", []) if t["kind"] == "lover"), None)
+    if partner == "none" and lover_tie:
+        partner = "lover"
+    pword = _w(rng, ["wife", "husband", "partner"], [47, 47, 6])
+    if partner == "spouse":
+        add(pword, "spouse", "their " + pword, True)
+    elif partner == "widowed":
+        add(pword, "spouse", "their late " + pword, False)["bond"] = rng.choice(["close", "fond", "fond", "strained"])
+    elif partner == "separated":
+        add(pword, "spouse", "their former " + pword, True)["bond"] = rng.choice(["strained", "estranged", "distant", "fond"])
+    elif partner == "lover":
+        m = add("lover", "spouse", (lover_tie or {}).get("label") or "their lover", True)
+        if m["bond"] in ("estranged", "distant", "dutiful"):
+            m["bond"] = rng.choice(["fond", "strained"])     # a lover gone cold is an ex, not a lover
+        if lover_tie:
+            m["bond"] = "close" if lover_tie["loyalty"] >= 4 else "fond"
+    if partner in ("spouse", "widowed", "separated"):
+        nk = _w(rng, list(range(7)), [20, 22, 22, 16, 11, 6, 3])
+    else:
+        nk = _w(rng, list(range(4)), [70, 18, 8, 4])
+    for i in range(nk):
+        word = _gender(rng, "daughter", "son")
+        place = "" if nk == 1 else "eldest " if i == 0 else "youngest " if i == nk - 1 else \
+            ["", "second ", "third ", "fourth ", "fifth "][min(i, 4)]
+        alive = rng.random() * 100 >= 6 + 4 * risk
+        add(word, "child", ("their %s%s" if alive else "their late %s%s") % (place, word), alive)
+    raised = None
+    parents = [m for m in members if m["role"] == "parent"]
+    if not any(m["alive"] for m in parents) and rng.random() < 0.7:
+        pool = RAISED_BY + (["an elder brother or sister"] if any(m["role"] == "sibling" and m["alive"] and "elder" in m["label"]
+                                                                   for m in members) else [])
+        raised = rng.choice(pool)
+    elif rng.random() < 0.06:
+        raised = rng.choice(RAISED_BY[:3])
+    # the exception: in a family of one feeling, one person who is the other way
+    exc = None
+    living = [m for m in members if m["alive"]]
+    if idio in ("Marked", "Riddled") and living and rng.random() < (0.5 if idio == "Marked" else 0.8):
+        exc = rng.choice(living)
+        exc["bond"] = FLIP[exc["bond"]]
+        if exc["rel"] == "lover" and exc["bond"] == "estranged":
+            exc["bond"] = "strained"
+        exc["exception"] = True
+    wound = None
+    if rng.random() < (0.5 if feel in ("Strained", "Estranged", "Broken") else 0.3):
+        ok = [wd for wd in WOUNDS if wd[1] is None or any(m["role"] == wd[1] and (m["alive"] or wd[1] == "parent")
+                                                           for m in members)]
+        wd = rng.choice(ok)
+        wound = wd[0]
+        if wd[2]:
+            tgt = [m for m in members if m["role"] == wd[1] and m["alive"]]
+            if tgt:
+                m_ = rng.choice(tgt)
+                m_["bond"] = wd[2]
+                m_["why"], m_["left"] = {"sibling": ("left and never wrote", "them"),
+                                         "child": ("turned against them", "them")}[wd[1]]
+    for m in members:
+        if m["bond"] in ("estranged", "strained", "distant") and m["role"] in COLD_WHY and not m.get("why"):
+            pool = COLD_WHY[m["role"]]
+            if m["bond"] == "distant":
+                pool = [x for x in pool if x[1] in ("none", "self", "them")] or pool
+            if m["role"] == "parent" and m["alive"] is None:
+                pool = [x for x in pool if x[0].startswith(("walked out", "was never there", "chose a new"))]
+            if m["role"] == "spouse" and "former" not in m["label"] and m["alive"]:
+                pool = [x for x in pool if not x[0].startswith(("left them", "they left", "never home"))] or pool
+            if m["alive"] is False:
+                pool = [x for x in pool if x[0] not in ("only turns up when they want something", "only writes to ask for money")]
+            m["why"], m["left"] = rng.choice(pool)
+    # where they live and their place among their own
+    alive_partner = next((m for m in members if m["role"] == "spouse" and m["alive"] and m["rel"] != "lover"
+                          and not m["label"].startswith("their former")), None)
+    kids_home = [m for m in members if m["role"] == "child" and m["alive"] and m["bond"] != "estranged"
+                 and rng.random() < 0.55]
+    if station == "Unmoored":
+        home = "nowhere fixed"
+    elif alive_partner and alive_partner["bond"] != "estranged":
+        home = "with their " + alive_partner["rel"] + (" and children" if kids_home else "")
+    elif kids_home:
+        home = "with their children"
+    elif station == "Sworn" and rng.random() < 0.5:
+        home = "among those they are sworn with"
+    elif any(m["role"] == "parent" and m["alive"] and m["bond"] not in ("estranged", "strained") for m in members) \
+            and rng.random() < 0.4:
+        home = "with their parents" if sum(1 for m in parents if m["alive"]) == 2 else "with a parent"
+    elif station == "Hand" and rng.random() < 0.3:
+        home = "in the household they serve"
+    elif any(m["role"] == "sibling" and m["alive"] for m in members) and rng.random() < 0.25:
+        home = "with a brother or sister"
+    else:
+        home = "alone"
+    places = list(PLACE_IN_FAMILY)
+    if order != "youngest":
+        places.remove("the baby of the family")
+    if nsib == 0:
+        places = [p for p in places if p not in ("the favourite", "the forgotten one", "the peacemaker")]
+    if home.startswith("with") and "parent" in home:
+        places.remove("the one who left")
+    hollow = (n.get("authenticity") or {}).get("kind") == "Hollow"
+    dearest = None
+    for want in (("close",), ("fond",)):
+        cands = [m for m in members if m["alive"] and m["bond"] in want]
+        if cands:
+            prio = {"child": 0, "spouse": 1, "sibling": 2, "parent": 3}
+            best = min(prio[m["role"]] for m in cands)
+            dearest = rng.choice([m for m in cands if prio[m["role"]] == best])["label"]
+            break
+    fam = {"feel": feel, "order": order, "members": members, "raised_by": raised,
+           "handed_down": rng.choice(HANDED_DOWN), "wound": wound, "place": rng.choice(places),
+           "home": home, "dearest": dearest, "performed": hollow}
+    n["family"] = fam
+    if add_ties:
+        family_ties(n, rng)
+    return fam
+
+
+def family_ties(n, rng):
+    """New people only: give their generic kin ties a face from the family, and make sure the
+    one they hold dearest is a tie, so family turns up in their days."""
+    fam = n["family"]
+    tied = {(t.get("who") or "").lower() for t in n["ties"]}
+    for t in n["ties"]:
+        if t["kind"] != "kin" or t.get("role"):
+            continue
+        free = [m for m in fam["members"] if m["alive"] and m["label"].lower() not in tied and m["role"] != "spouse"]
+        if free:
+            m = rng.choice(free)
+            cold = m["bond"] in ("estranged", "strained", "distant") and m["role"] != "child"
+            t["role"], t["label"], t["who"] = ("kin" if cold else m["role"]), m["label"], m["label"]
+            t["loyalty"] = clamp(BOND_LOYALTY[m["bond"]] + rng.choice([-1, 0, 0, 1]), 1, 6)
+        else:
+            lab = rng.choice(["their cousin", "an aunt", "an uncle", "a grandparent", "a niece", "a nephew"])
+            t["role"], t["label"], t["who"] = "kin", lab, lab
+        tied.add(t["label"].lower())
+    dm = next((m for m in fam["members"] if m["label"] == fam["dearest"]), None)
+    if dm and dm["label"].lower() not in tied:
+        if dm["rel"] == "lover":
+            return
+        n["ties"].append({"kind": "lover" if dm["role"] == "spouse" else "kin", "role": dm["role"],
+                          "label": dm["label"], "who": dm["label"],
+                          "loyalty": clamp(BOND_LOYALTY[dm["bond"]] + rng.choice([0, 1]), 1, 6), "reach": rng.randint(1, 6)})
+
+
+def taste_build(n, rng):
+    idio = idio_of(n)
+    nl, nd = {"Consistent": (1, 1), "Ordinary": (2, rng.randint(1, 2)), "Marked": (3, rng.randint(2, 3)),
+              "Riddled": (4, rng.randint(3, 4))}[idio]
+    ax = n["axes"]
+
+    def grain(name, side):
+        lean = TASTE_BY[name][2] if name in TASTE_BY else None
+        if not lean:
+            return "neutral"
+        fit = ax[lean[0]] * lean[1] * (1 if side == "like" else -1)
+        return "against" if fit <= -2 else "with" if fit >= 2 else "neutral"
+
+    out, used = [], set()
+
+    def take(side, name, against_ok):
+        if name in used:
+            return False
+        g = grain(name, side)
+        if g == "against" and not against_ok:
+            return False
+        bump = 1 if idio == "Riddled" else 0
+        lvl = min(2, (0 if rng.random() < 0.55 else 1 if rng.random() < 0.75 else 2) + (bump if rng.random() < 0.4 else 0))
+        out.append({"side": side, "thing": name, "level": lvl, "grain": g,
+                    "cat": TASTE_BY[name][1] if name in TASTE_BY else "thing"})
+        used.add(name)
+        return True
+
+    if idio in ("Marked", "Riddled") and rng.random() < (0.4 if idio == "Marked" else 0.8):
+        a_, b_ = rng.choice(TASTE_PAIRS)
+        take("like", a_, True)
+        take("dislike", b_, True)
+    names = [t[0] for t in TASTES]
+    need_against = {"Consistent": 0, "Ordinary": 0, "Marked": 1, "Riddled": 2}[idio]
+    for side, k in (("like", nl), ("dislike", nd)):
+        tries = 0
+        while sum(1 for x in out if x["side"] == side) < k and tries < 400:
+            tries += 1
+            nm = rng.choice(names)
+            have_against = sum(1 for x in out if x["grain"] == "against")
+            if have_against < need_against and grain(nm, side) != "against" and tries < 300:
+                continue
+            take(side, nm, idio != "Consistent")
+    n["tastes"] = out
+    return out
+
+
+def taste_text(t):
+    return "%s %s" % (TASTE_STRENGTH[t["side"]][t["level"]], t["thing"])
+
+
+def pet_chances(n):
+    dials = n.get("dials") or DEFAULT_DIALS
+    ax = n["axes"]
+    rank = RANK.get(n.get("station"), 0)
+    have = clamp(7 + 2 * ax[W] - 4 * max(0, dial(dials, "S") - 1) + (2 if rank >= 2 else 0), 0, 14)
+    exotic = clamp(2 + 2 * rank + 2 * dial(dials, "X") + ax[O], 0, 10)
+    return have, exotic
+
+
+def pet_build(n, rng, add_tie=False):
+    have, exotic = pet_chances(n)
+    pet = None
+    if rng.random() * 100 < have:
+        ex = rng.random() * 100 < exotic
+        pool = PET_EXOTIC + (PET_UNCANNY if dial(n.get("dials") or DEFAULT_DIALS, "X") >= 2 else []) if ex else PET_COMMON
+        kind = rng.choice(pool)
+        hollow = (n.get("authenticity") or {}).get("kind") == "Hollow"
+        way = "treats it as a working animal and nothing more" if hollow else rng.choice(PET_WAY)
+        loy = clamp(rng.randint(2, 6) + (1 if n["axes"][W] >= 2 else 0) - (2 if hollow else 0), 1, 6)
+        label = "their " + kind.split(" ", 1)[1] if kind.startswith(("a ", "an ")) else "their " + kind
+        if kind.startswith("a pair of "):
+            label = "their " + kind[len("a pair of "):]
+        pet = {"kind": kind, "exotic": ex, "label": label, "way": way, "loyalty": loy, "alive": True}
+        hates = [t for t in (n.get("tastes") or []) if t["side"] == "dislike" and t["thing"] in ("animals", "dogs", "cats", "birds")]
+        if hates:
+            pet["despite"] = "keeps it despite not caring for " + hates[0]["thing"]
+        if add_tie:
+            n["ties"].append({"kind": "pet", "role": "pet", "label": label, "who": label, "loyalty": loy, "reach": 1})
+    n["pet"] = pet
+    return pet
+
+
+def spirit_build(n, rng):
+    dials = n.get("dials") or DEFAULT_DIALS
+    fd = dial(dials, "F")
+    ax = n["axes"]
+    styles = [v["style"] for v in n.get("voices", [])]
+    dom = styles[0] if styles else ""
+    hollow = (n.get("authenticity") or {}).get("kind") == "Hollow"
+    keys = list(VIEWS)
+    w = {k: 8 for k in keys}
+    w["unexamined"] = 14
+    w["aware"] = 14
+    if fd == 0:
+        w["nothing"] += 10; w["chance"] += 6; w["unexamined"] += 6; w["here"] += 4
+    if fd >= 2:
+        w["aware"] += 10; w["eternal"] += 6; w["partial"] += 6; w["nothing"] -= 5; w["chance"] -= 4
+    if n.get("creed") == "Nothing" or dom == "Predator":
+        w["nothing"] += 14; w["chance"] += 8
+    if n.get("creed") == "Faith" or dom == "Zealot":
+        w["aware"] += 8; w["eternal"] += 6; w["partial"] += 6
+    if n.get("creed") == "Pleasure":
+        w["here"] += 10
+    if ax[O] >= 2 or dom == "Visionary":
+        w["measure"] += 8; w["between"] += 4; w["eternal"] += 3
+    if ax[O] <= -2:
+        w["unexamined"] += 8; w["measure"] -= 6
+    if ax[C] <= -2:
+        w["evasive"] += 8
+    view = _w(rng, keys, [max(1, w[k]) for k in keys])
+    after = rng.choice(VIEW_AFTER[view])
+    if after == "unknown" and ax[V] <= -1 and rng.random() < 0.5:
+        after = "shrug"
+    fw = {"self": 16, "others": 14, "kin": 16, "one": 6, "bargain": 12, "unnamed": 14, "nothing": 10}
+    if dom in ("Self-Sacrificing", "Benevolent") or ax[W] >= 2:
+        fw["others"] += 14
+    if dom in ("Predator", "Self-Made", "Schemer") or ax[W] <= -2:
+        fw["self"] += 14; fw["bargain"] += 6
+    if view in ("eternal", "between", "measure"):
+        fw["one"] += 10
+    if view in ("nothing", "chance", "unexamined", "evasive"):
+        fw["nothing"] += 12; fw["one"] = 2
+    if ax[M] >= 2:
+        fw["self"] += 4
+    fk = list(fw)
+    what_for = _w(rng, fk, [fw[k] for k in fk])
+    pk = list(PRACTICE)
+    pw = {"none": 20, "private": 22, "observant": 18, "devout": 6, "ascetic": 3, "secret": 4, "outward": 8}
+    pw["observant"] += 8 * fd; pw["devout"] += 4 * fd; pw["none"] = max(2, pw["none"] - 6 * fd)
+    if dom == "Zealot" or n.get("creed") == "Faith":
+        pw["devout"] += 18; pw["ascetic"] += 6
+    if ax[D] >= 2:
+        pw["observant"] += 8; pw["ascetic"] += 3
+    if dial(dials, "D") >= 2 or dial(dials, "O") >= 3:
+        pw["secret"] += 6; pw["outward"] += 8
+    if view in ("nothing", "chance"):   # last, so nothing above can make them devout in nothing
+        pw["none"] += 30; pw["devout"] = 0; pw["ascetic"] = 0; pw["observant"] = 3
+    practice = _w(rng, pk, [pw[k] for k in pk])
+    cert = clamp(1 + (1 if ax[D] >= 1 else 0) + (1 if dom == "Zealot" else 0) - (1 if ax[O] >= 2 else 0)
+                 + rng.choice([-1, 0, 0, 1]) + (1 if fd >= 3 else 0), 0, 3)
+    if view == "evasive":
+        cert = min(cert, 1)
+    if view == "unexamined":
+        cert = min(cert, 2)
+    tw = {"private": 30, "tolerant": 30, "curious": 12, "persuades": 10, "scornful": 8}
+    if ax[O] >= 2: tw["curious"] += 20
+    if ax[O] <= -2: tw["scornful"] += 12; tw["curious"] = 2
+    if cert == 3: tw["persuades"] += 15; tw["scornful"] += 10
+    if ax[W] >= 2: tw["tolerant"] += 10
+    if what_for == "one": tw["scornful"] = 1
+    tk = list(tw)
+    toward = _w(rng, tk, [tw[k] for k in tk])
+    if hollow:
+        what_for, cert = "nothing", 0
+        practice = "outward" if practice != "none" else "none"
+    odd = None
+    idio = idio_of(n)
+    if idio in ("Marked", "Riddled") and rng.random() < (0.35 if idio == "Marked" else 0.7):
+        fits = [o for o in SPIRIT_ODD if
+                ("death ends" not in o or after == "none") and
+                ("believes none" not in o or (practice in ("observant", "devout", "outward") and cert <= 1)) and
+                ("scorns all belief" not in o or toward == "scornful") and
+                ("certain of what comes after" not in o or (cert >= 2 and after not in ("none", "unknown", "shrug", "taught"))) and
+                ("chance" not in o or view == "chance") and
+                ("prays only" not in o or practice in ("private", "secret", "none"))]
+        if fits:
+            odd = rng.choice(fits)
+    sp = {"view": view, "after": after, "for": what_for, "practice": practice, "certainty": cert,
+          "toward": toward, "odd": odd, "performed": hollow}
+    n["spirit"] = sp
+    return sp
+
+
+def spirit_text(sp):
+    return "%s. After death: %s. What it is for: %s. Practice: %s. Certainty: %s. Toward others: %s." % (
+        VIEWS[sp["view"]][0].upper() + VIEWS[sp["view"]][1:], AFTERLIFE[sp["after"]], SPIRIT_FOR[sp["for"]],
+        PRACTICE[sp["practice"]], CERTAINTY[sp["certainty"]], TOWARD[sp["toward"]])
+
+
+def life_build(n, rng=None, add_ties=False):
+    """Family, tastes, pet and outlook. Worked out the same way every time from the person's id
+    when not given a generator, so an old ledger gains them without changing anything else."""
+    rng = rng or random.Random("life:%s" % n.get("id"))
+    idio_of(n, rng)
+    family_build(n, rng, add_ties)
+    taste_build(n, rng)
+    pet_build(n, rng, add_ties)
+    spirit_build(n, rng)
+
+
+def life_of(n):
+    if not (isinstance(n.get("family"), dict) and isinstance(n.get("tastes"), list) and "pet" in n
+            and isinstance(n.get("spirit"), dict) and n.get("idio") in IDIO):
+        life_build(n)
+    return n
+
+
+def taste_match(n, text):
+    low = (text or "").strip().lower()
+    if not low:
+        return None
+    for t in n.get("tastes") or []:
+        if low in t["thing"].lower() or t["thing"].lower() in low:
+            return t
+    return None
+
+
+# how much of a grief a bond carries: a range, rolled each time, because people aren't clocks
+BOND_GRIEF = {"close": (0.9, 1.4), "fond": (0.7, 1.15), "dutiful": (0.5, 0.95), "distant": (0.2, 0.7),
+              "strained": (0.3, 0.9), "estranged": (0.0, 0.5)}
+REGRET_CHANCE = 0.2   # a cold bond that, once it can never be mended, hits harder than anyone expected
+
+
+def grief_length(n, days, role, member):
+    """Days of grief, from the role's usual length, this person's pace and how they felt about the
+    one they lost. A loved child is never a short grief; a hated one can be no grief at all."""
+    if not days:
+        return 0, None
+    note = None
+    days = days * tempo_of(n)["grief"] * random.lognormvariate(0, 0.25)
+    bond = (member or {}).get("bond")
+    if bond in BOND_GRIEF:
+        lo, hi = BOND_GRIEF[bond]
+        if bond in ("strained", "estranged", "distant") and random.random() < REGRET_CHANCE:
+            lo, hi = 1.0, 1.6
+            note = "the bond was %s, and now it can never be mended: it hits harder than anyone expected" % bond
+        elif bond == "estranged" and member.get("left") in ("self", "both") and role == "child":
+            lo, hi = 0.0, 0.3       # they cut this child off, or hated them
+        days *= random.uniform(lo, hi)
+        if role == "child" and bond in ("close", "fond") and not note:
+            days = max(days, random.uniform(18, 30))     # never short for a child they loved
+        elif role == "child" and bond == "dutiful":
+            days = max(days, random.uniform(9, 18))
+    days = int(round(days))
+    if bond in BOND_GRIEF and days == 0:
+        note = "no grief to speak of; if anything, relief, or nothing at all"
+    elif not bond:
+        days = max(1, days)
+    return days, note
+
+
+def kin_of(n, name):
+    """A family member or pet by label: (role, loyalty, record), or None."""
+    low = (name or "").strip().lower()
+    if not low:
+        return None
+    for m in (n.get("family") or {}).get("members", []):
+        if m["label"].lower() == low:
+            if m["bond"] in ("estranged", "strained", "distant") and m["role"] != "child":
+                return ("kin", BOND_LOYALTY[m["bond"]], m)
+            return (m["role"], BOND_LOYALTY[m["bond"]], m)
+    p = n.get("pet")
+    if p and p["label"].lower() == low:
+        return ("pet", p["loyalty"], p)
+    return None
+
+
+def show_life(n):
+    life_of(n)
+    fam = n["family"]
+    alive = [m for m in fam["members"] if m["alive"]]
+    print("Family (%s%s): %s; %s; lives %s%s" % (
+        fam["feel"], ", performed" if fam.get("performed") else "", fam["order"], fam["place"], fam["home"],
+        "; raised by " + fam["raised_by"] if fam.get("raised_by") else ""))
+    print("  " + ", ".join("%s (%s%s%s)" % (m["label"], m["bond"] if m["alive"] is not False else "dead; was " + m["bond"],
+                                           ", the exception" if m.get("exception") else "",
+                                           ": " + m["why"] if m.get("why") else "") for m in fam["members"]))
+    print("  Handed down: %s%s%s" % (fam["handed_down"], " | Wound: " + fam["wound"] if fam.get("wound") else "",
+                                    " | Dearest: " + fam["dearest"] if fam.get("dearest") else
+                                    (" | no one living they'd call dear" if alive else "")))
+    p = n.get("pet")
+    if p:
+        print("Pet: %s%s, %s%s%s" % (p["kind"], " (exotic)" if p["exotic"] else "", p["way"],
+                                     "; " + p["despite"] if p.get("despite") else "", "" if p["alive"] else " (dead)"))
+    print("Tastes (%s): %s" % (n["idio"], "; ".join(taste_text(t) + (" (against the grain)" if t["grain"] == "against" else "")
+                                                   for t in n["tastes"])))
+    sp = n["spirit"]
+    print("Outlook%s: %s%s" % (" (performed)" if sp.get("performed") else "", spirit_text(sp),
+                               " Odd: " + sp["odd"] + "." if sp.get("odd") else ""))
+
+
+
+def life_audit(count=3000, seed=7):
+    """Family, tastes, pets and outlook: every rule checked across thousands of people in
+    worlds from peaceful and secular to starving, strange and fervent."""
+    import copy, tempfile, os, contextlib, io
+    problems = []
+    state = random.getstate()
+    random.seed(seed)
+    worlds = [DEFAULT_DIALS, [0, 0, 0, 0, 0, 0, 0], [3, 3, 3, 3, 3, 3, 3], [2, 1, 3, 0, 0, 2, 1], [0, 2, 0, 3, 3, 1, 2]]
+    pets = exotic = uncanny = 0
+    chances = []
+    marked_against = marked_n = 0
+    views = collections.Counter()
+    for i in range(count):
+        dials = list(worlds[i % len(worlds)])
+        n = build(dials, "A%d" % i)
+        fam, tastes, pet, sp, idio = n["family"], n["tastes"], n["pet"], n["spirit"], n["idio"]
+        mem = fam["members"]
+        labels = [m["label"] for m in mem]
+        P = lambda msg: problems.append(msg)
+        if idio not in IDIO: P("unknown idiosyncrasy " + str(idio))
+        if n["flags"]["outlier"] and idio != "Riddled": P("an outlier who is not riddled with contradictions")
+        # tastes
+        nl = {"Consistent": (1, 1), "Ordinary": (2, 2), "Marked": (3, 3), "Riddled": (4, 4)}[idio]
+        nd_lo = {"Consistent": 1, "Ordinary": 1, "Marked": 2, "Riddled": 3}[idio]
+        likes = [t["thing"] for t in tastes if t["side"] == "like"]
+        hates = [t["thing"] for t in tastes if t["side"] == "dislike"]
+        if len(likes) != nl[0]: P("%s person with %d likes" % (idio, len(likes)))
+        if not nd_lo <= len(hates) <= nd_lo + (0 if idio == "Consistent" else 1): P("%s person with %d dislikes" % (idio, len(hates)))
+        if set(likes) & set(hates): P("likes and dislikes the same thing")
+        if idio == "Consistent" and any(t["grain"] == "against" for t in tastes): P("a consistent person with a taste against their grain")
+        if idio in ("Marked", "Riddled"):
+            marked_n += 1
+            need = 1 if idio == "Marked" else 2
+            marked_against += sum(1 for t in tastes if t["grain"] == "against") >= need
+        for t in tastes:
+            if not 0 <= t["level"] <= 2 or t["cat"] not in ("sense", "food", "people", "pastime", "thing"):
+                P("malformed taste %s" % t)
+            if t["thing"] in TASTE_BY:
+                lean = TASTE_BY[t["thing"]][2]
+                fit = n["axes"][lean[0]] * lean[1] * (1 if t["side"] == "like" else -1) if lean else 0
+                if (t["grain"] == "against") != (fit <= -2): P("taste grain miscounted: %s" % t["thing"])
+        # pet
+        have, ex = pet_chances(n)
+        chances.append(have)
+        if not (0 <= have <= 14 and 0 <= ex <= 10): P("pet chances out of range: %s %s" % (have, ex))
+        pet_ties = [t for t in n["ties"] if t["kind"] == "pet"]
+        if pet:
+            pets += 1; exotic += pet["exotic"]
+            if pet["kind"] in PET_UNCANNY:
+                uncanny += 1
+                if dial(dials, "X") < 2: P("an uncanny pet in a world where reality is reliable")
+            if pet["exotic"] != (pet["kind"] in PET_EXOTIC + PET_UNCANNY): P("exotic flag wrong for " + pet["kind"])
+            if len(pet_ties) != 1 or pet_ties[0]["label"] != pet["label"]: P("pet without its tie")
+            if relation_to(n, pet["label"])[0] not in ("charge", "familiar"): P("a pet that is not a charge")
+            if n["authenticity"]["kind"] == "Hollow" and "working animal" not in pet["way"]: P("a hollow person doting on a pet")
+            if pet.get("despite") and not any(t["side"] == "dislike" and t["thing"] in pet["despite"] for t in tastes):
+                P("keeps a pet 'despite' a dislike they don't have")
+        elif pet_ties:
+            P("a pet tie without a pet")
+        # family
+        if len(set(labels)) != len(labels): P("two family members with one name: %s" % labels)
+        sibs = [m for m in mem if m["role"] == "sibling"]
+        par = [m for m in mem if m["role"] == "parent"]
+        kids = [m for m in mem if m["role"] == "child"]
+        spouse = [m for m in mem if m["role"] == "spouse"]
+        if len(par) != 2: P("not exactly two parents on record")
+        if len(spouse) > 1: P("more than one partner on record")
+        o = fam["order"]
+        elder = any("elder" in m["label"] for m in sibs); younger = any("younger" in m["label"] for m in sibs)
+        if (o == "only child") != (not sibs): P("only child with siblings, or the reverse")
+        if o == "eldest" and elder: P("eldest with an elder sibling")
+        if o == "youngest" and younger: P("youngest with a younger sibling")
+        if o == "middle" and not (elder and younger): P("middle child without both sides")
+        for m in mem:
+            if m["alive"] is False and "late" not in m["label"]: P("a dead relative not marked late: " + m["label"])
+            if m["alive"] and "late" in m["label"]: P("a living relative marked late: " + m["label"])
+            if m["bond"] not in BONDS: P("unknown bond " + m["bond"])
+            if m["bond"] in ("estranged", "strained", "distant") and m["role"] in COLD_WHY and not m.get("why"):
+                P("a cold bond with no cause: " + m["label"])
+            if m.get("why") and m["alive"] is not True and m["why"].startswith("only "):
+                P("the dead or unknown still turning up: " + m["label"])
+            if m.get("why") and m.get("left") not in ("them", "self", "both", "none"): P("cold bond without a direction")
+            if m["alive"] is None and m.get("why") and not m["why"].startswith(("walked out", "was never there", "chose a new")):
+                P("a parent they never knew, estranged for a reason that needs knowing them")
+            if relation_to(n, m["label"])[0] == "stranger": P("a family member reads as a stranger: " + m["label"])
+        h = fam["home"]
+        alive_sp = [m for m in spouse if m["alive"] and m["rel"] != "lover" and "former" not in m["label"]]
+        if h.startswith("with their ") and h.split(" ")[2] in ("wife", "husband", "partner"):
+            if not alive_sp or alive_sp[0]["bond"] == "estranged": P("lives with a partner who isn't there: " + h)
+        if "children" in h and not any(m["alive"] and m["bond"] != "estranged" for m in kids): P("lives with children who aren't there")
+        if h == "with their parents" and sum(1 for m in par if m["alive"]) != 2: P("lives with both parents, not both alive")
+        if h == "with a parent" and not any(m["alive"] for m in par): P("lives with a parent, none alive")
+        if h == "with a brother or sister" and not any(m["alive"] for m in sibs): P("lives with a sibling, none alive")
+        if h == "nowhere fixed" and n["station"] != "Unmoored": P("homeless without being unmoored")
+        if any(m["rel"] == "lover" and m["bond"] in ("estranged", "distant") for m in mem): P("an estranged lover")
+        if fam["place"] == "the baby of the family" and o != "youngest": P("the baby of the family who isn't the youngest")
+        if fam["place"] == "the one who left" and "parent" in h: P("the one who left, still living with parents")
+        if fam["place"] in ("the favourite", "the forgotten one", "the peacemaker") and not sibs: P("%s, as an only child" % fam["place"])
+        if fam.get("raised_by") == "an elder brother or sister" and not elder: P("raised by an elder sibling they don't have")
+        if fam.get("wound"):
+            req = next(w for w in WOUNDS if w[0] == fam["wound"])[1]
+            if req and not any(m["role"] == req for m in mem): P("a family wound needing a %s they don't have" % req)
+        if fam.get("dearest"):
+            dm = [m for m in mem if m["label"] == fam["dearest"]]
+            if not dm or not dm[0]["alive"] or dm[0]["bond"] not in ("close", "fond"): P("dearest is not a living, loved relative")
+            elif dm[0]["rel"] != "lover" and not any((t.get("who") or "") == fam["dearest"] for t in n["ties"]):
+                P("the dearest relative is not among their ties")
+        lover_t = [t for t in n["ties"] if t["kind"] == "lover" and not t.get("role")]
+        if lover_t and not spouse: P("a lover tie but no partner on record")
+        for t in n["ties"]:
+            if t.get("role") in FAMILY_ROLES and t["role"] != "kin" and t["who"] not in labels:
+                P("a family tie to someone not in the family: " + t["label"])
+            if t.get("role") in ("parent", "sibling", "spouse") and t["who"] in labels:
+                m = next(m for m in mem if m["label"] == t["who"])
+                if m["bond"] in ("estranged", "strained", "distant"): P("an estranged relative tied as beloved")
+            if "{tie}" in t["label"]: P("unfilled tie label")
+        # outlook
+        views[sp["view"]] += 1
+        if sp["after"] not in VIEW_AFTER[sp["view"]] and not (sp["view"] in ("measure", "partial", "eternal", "aware", "here") and sp["after"] == "shrug"):
+            if not (sp["after"] == "shrug" and "unknown" in VIEW_AFTER[sp["view"]]):
+                P("afterlife %s doesn't follow from view %s" % (sp["after"], sp["view"]))
+        if sp["view"] == "evasive" and sp["certainty"] > 1: P("certain about refusing to be certain")
+        if sp["view"] in ("nothing", "chance") and sp["practice"] in ("devout", "ascetic"): P("devout in a belief in nothing")
+        if n["authenticity"]["kind"] == "Hollow" and (sp["for"] != "nothing" or sp["certainty"] != 0 or sp["practice"] not in ("outward", "none")):
+            P("a hollow person who truly believes")
+        if sp["for"] == "one" and sp["toward"] == "scornful": pass  # rare, allowed: weight 1
+        if sp.get("odd"):
+            o_ = sp["odd"]
+            if "death ends" in o_ and sp["after"] != "none": P("odd outlook contradicts its own premise: " + o_)
+            if "believes none" in o_ and (sp["practice"] not in ("observant", "devout", "outward") or sp["certainty"] > 1):
+                P("odd: keeps observances they don't keep, or believes after all")
+            if "scorns all belief" in o_ and sp["toward"] != "scornful": P("odd: scorns belief without scorning")
+            if "chance" in o_ and sp["view"] != "chance": P("odd: chance believer who isn't one")
+            if idio not in ("Marked", "Riddled"): P("an oddity of outlook in someone of a piece")
+        for k in ("view", "after", "for", "practice", "toward"):
+            if sp[k] not in {"view": VIEWS, "after": AFTERLIFE, "for": SPIRIT_FOR, "practice": PRACTICE, "toward": TOWARD}[k]:
+                P("unknown outlook %s: %s" % (k, sp[k]))
+        if sp["after"] not in GRIEF_SPIRIT: P("no grief line for afterlife " + sp["after"])
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                show_life(n)
+        except Exception as e:
+            P("show_life crash: %s" % e)
+        # an old ledger gains the same life every time, and no new ties
+        if i % 50 == 0:
+            old = copy.deepcopy(n)
+            for k in ("family", "tastes", "pet", "spirit", "idio"):
+                old.pop(k, None)
+            old["ties"] = [t for t in old["ties"] if t["kind"] != "pet"]
+            t0 = len(old["ties"])
+            a1, a2 = migrate(copy.deepcopy(old)), migrate(copy.deepcopy(old))
+            if json.dumps([a1["family"], a1["tastes"], a1["pet"], a1["spirit"]], sort_keys=True) != \
+               json.dumps([a2["family"], a2["tastes"], a2["pet"], a2["spirit"]], sort_keys=True):
+                P("migration does not give the same life twice")
+            if len(a1["ties"]) != t0: P("migration added ties to an old ledger")
+    # whole-population checks
+    rate = 100.0 * pets / count
+    if not (0 < rate <= 14): P("pet ownership %.1f%%, outside 0-14%%" % rate)
+    ex_rate = 100.0 * exotic / max(1, pets)
+    if ex_rate > 10: P("exotic pets %.1f%% of pets, above 10%%" % ex_rate)
+    if marked_n and marked_against / marked_n < 0.85: P("marked people rarely have tastes against their grain (%.0f%%)" % (100.0 * marked_against / marked_n))
+    if len(views) < len(VIEWS): P("some views never arise: %s" % sorted(set(VIEWS) - set(views)))
+    # tables
+    for v, afs in VIEW_AFTER.items():
+        if v not in VIEWS or not afs or any(x not in AFTERLIFE for x in afs): P("view table broken at " + v)
+    for a_, b_ in TASTE_PAIRS:
+        if a_ == b_: P("a taste paired with itself")
+    if len({t[0] for t in TASTES}) != len(TASTES): P("a taste listed twice")
+    for q in QUIRKS:
+        if any(q == t[0] for t in TASTES): P("a taste duplicates a quirk: " + q)
+    # grief follows the bond, within a range
+    gp = build(list(DEFAULT_DIALS), "G")
+    for pace in (0.4, 1.0, 2.5):
+        gp["tempo"]["grief"] = pace
+        for bond in BONDS:
+            for left in ("them", "self", "both", "none"):
+                r = [grief_length(gp, 21 + d(14), "child", {"bond": bond, "left": left})[0] for _ in range(300)]
+                if bond in ("close", "fond") and min(r) < 18: P("a loved child grieved for under 18 days (%s)" % bond)
+                if bond != "estranged" and 0 in r: P("no grief at all for a child who was %s" % bond)
+                if len(set(r)) < 5: P("grief for a %s child barely varies" % bond)
+    # a death in the family, end to end
+    work = tempfile.mkdtemp()
+    for i in range(40):
+        n = build(list(DEFAULT_DIALS), "L%d" % i)
+        tgt = [m for m in n["family"]["members"] if m["alive"]] + ([n["pet"]] if n["pet"] else [])
+        if not tgt:
+            continue
+        m = random.choice(tgt)
+        p_ = os.path.join(work, "l%d.json" % i)
+        save(n, p_)
+        sys.argv = ["forge.py", "event", p_, "loss", "--about", m["label"]]
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                main()
+        except SystemExit as e:
+            P("loss event exits: %s" % e); continue
+        except Exception as e:
+            P("loss event crash: %s" % e); continue
+        n2 = load(p_)
+        m2 = kin_of(n2, m["label"].replace("their ", "their late ", 1)) or kin_of(n2, m["label"])
+        if not m2 or m2[2]["alive"]: P("a relative still alive after their loss")
+        if n2["family"].get("dearest") == m["label"]: P("the dead are still the dearest")
+        if "in their outlook" not in out.getvalue() and "performs the grief" not in out.getvalue() and \
+                "no grief to speak of" not in out.getvalue() and \
+                relation_to(n, m["label"])[0] != "stranger":
+            P("grief without the outlook's colour")
+    random.setstate(state)
+    return problems, {"people": count, "pet_rate": rate, "exotic_rate": ex_rate, "uncanny": uncanny,
+                      "pet_chance_mean": sum(chances) / len(chances), "views": dict(views)}
+
+
 def migrate(n):
     """Bring a person's ledger up to the current schema. Never changes who they are: an id
     once given is kept for life; missing layers are worked out the same way every time."""
@@ -1634,6 +2525,7 @@ def migrate(n):
     speech_of(n)
     strain_of(n)
     tempo_of(n)
+    life_of(n)
     n["schema"] = SCHEMA
     return n
 
@@ -1871,9 +2763,25 @@ def cmd_meet(a):
         if a.approach:
             ap += CIRC[c].get("approach", {}).get(a.approach, 0)
     ap = clamp(ap, -2, 2)
-    about_you = trust + ap + creed + social + cont + dang
+    life_of(n)
+    sp_ = n["spirit"]
+    outlook = 0
+    if a.spirit and not sp_.get("performed"):
+        if a.spirit == "shared":
+            outlook = 1 if (sp_["certainty"] >= 2 or sp_["toward"] == "persuades") and sp_["for"] != "nothing" else 0
+        else:
+            outlook = 0 if (sp_["for"] == "nothing" or sp_["view"] == "evasive") else \
+                -2 if (sp_["certainty"] == 3 or sp_["practice"] in ("devout", "ascetic")) else -1
+            if sp_["toward"] == "curious" and outlook < 0:
+                outlook += 1
+    taste, tmatch = 0, None
+    if a.taste:
+        tmatch = taste_match(n, a.taste)
+        if tmatch:
+            taste = (1 if tmatch["side"] == "like" else -1) * (2 if tmatch["level"] == 2 else 1)
+    about_you = trust + ap + creed + social + cont + dang + outlook
     feel = clamp(int(round((n.get("affect") or {}).get("feeling", 0) / 2)), -3, 3)
-    about_them = td["mood"] + chronic(n) + feel
+    about_them = td["mood"] + chronic(n) + feel + taste
     mood = dv["baseline"] + about_them + about_you
     capped = ""
     if mood <= dv["fuse"] and not (about_you <= -1 or dv["displacer"]):
@@ -1963,7 +2871,9 @@ def cmd_meet(a):
     print("Mood %+d = baseline %+d, their day %+d (%s), chronic %+d, feeling %+d, trust %+d, approach %+d, "
           "creed %+d, social %+d, contagion %+d, danger %+d%s" % (mood, dv["baseline"], td["mood"], td["cause"],
                                                                  chronic(n), feel, trust, ap, creed, social, cont,
-                                                                 dang, capped))
+                                                                 dang, capped)
+          + ("" if not (a.taste or a.spirit) else " | taste %+d%s, outlook %+d" % (
+              taste, "" if tmatch or not a.taste else " (not one of their tastes)", outlook)))
     if active:
         print("Circumstances: " + ", ".join(active))
     print("Band: %s%s -> shows as %s%s%s" % (intensity(mood, band, n), band, tint if form == raw else "",
@@ -2022,6 +2932,10 @@ def cmd_meet(a):
         else:
             qs.append(q)
     print("Quirks: " + "; ".join(qs))
+    if tmatch:
+        print("Taste touched: %s. Show it in the body or a word, never explained." % taste_text(tmatch))
+    if set(active) & {"grieving", "solemn"} or a.spirit:
+        print("Outlook (narrator only): %s%s" % (spirit_text(sp_), " Odd: " + sp_["odd"] + "." if sp_.get("odd") else ""))
     if td.get("trailing") and not any(x in ("trailing", "clipped", "short", "short and hard", "rambling",
                                             "broken by breath", "flat; repeats things") for x in sp):
         sp.append("trails off now and then")
@@ -2073,6 +2987,7 @@ def cmd_meet(a):
         "violence_steady": bool(a.violence and td.get("shaken") is None),
         "shaken": td.get("shaken"), "danger_beat": lean, "danger_replaces": bool(lean and L.get("fits")),
         "stratagem": plan, "quirks": qs, "speech": sp, "punctuation": punct, "talk": talk, "under_strain": under, "business": beats["business"], "mishear": beats["mishear"], "carried": carried, "believes": believes, "today": td.get("cause"),
+        "taste": taste, "taste_touched": taste_text(tmatch) if tmatch else None, "outlook": outlook,
     })
 
 
@@ -2080,7 +2995,15 @@ def cmd_audit(a):
     """Preemptive amendment review: every form x every combination of up to three circumstances x
     every band x a spread of personalities must settle on a form that fits. Run after adding any
     form, circumstance, quirk or style."""
-    problems = []
+    life_p, life_s = life_audit(800 if not getattr(a, "life", False) else 3000)
+    print("Life: %(people)d people built; %(pet_rate).1f%% keep a pet (mean chance %(pet_chance_mean).1f%%), "
+          "%(exotic_rate).1f%% of those exotic, %(uncanny)d uncanny." % life_s)
+    if getattr(a, "life", False):
+        for u in dict.fromkeys(life_p):
+            print("  PROBLEM: " + u)
+        print("No unhandled cases in family, tastes, pets or outlook." if not life_p else "")
+        sys.exit(1 if life_p else 0)
+    problems = list(life_p)
     forms = set(FORM_TAGS)
     for s in STYLES:
         for f in s["kind"] + s["mid"] + s["host"]:
@@ -2614,9 +3537,29 @@ def cmd_event(a):
             else:
                 base, spread = GRIEF_DAYS.get(role or "kin", (7, 7))
             days = base + (d(spread) if spread else 0)
-            days = max(1, int(round(days * tempo_of(n)["grief"] * random.lognormvariate(0, 0.25)))) if days else 0
+            kin = kin_of(n, a.about) if a.about else None
+            days, gnote = grief_length(n, days, role, kin[2] if kin and kin[2] is not n.get("pet") else None)
+            if gnote:
+                notes.append(gnote)
             if role in ("mentor", "spiritual", "symbol"):
                 st["Meaning"] = clamp(st["Meaning"] - 2, -2, 1)
+            if kin and kin[2].get("alive"):
+                kin[2]["alive"] = False
+                if kin[2] is not n.get("pet") and not kin[2]["label"].startswith("their late "):
+                    kin[2]["label"] = kin[2]["label"].replace("their ", "their late ", 1)
+                    for t in n["ties"]:
+                        if (t.get("who") or "").lower() == a.about.lower():
+                            t["who"] = t["label"] = kin[2]["label"]
+                    if (n["family"].get("dearest") or "").lower() == a.about.lower():
+                        n["family"]["dearest"] = None
+            sp_ = life_of(n)["spirit"]
+            if days and cls != "stranger":
+                notes.append(("performs the grief their people expect" if sp_.get("performed") else
+                              "in their outlook: " + GRIEF_SPIRIT[sp_["after"]]))
+                if (role in ("child", "spouse", "lover") and 0 < sp_["certainty"] < 3 and not sp_.get("performed")
+                        and random.random() < 0.5):
+                    sp_["certainty"] -= 1
+                    notes.append("what they believe is shaken (now %s)" % CERTAINTY[sp_["certainty"]])
             if days:
                 if processing(n) == "Numb":
                     af["grief_delay"] = d(3)
@@ -3347,8 +4290,8 @@ def thought_ripple(n, active):
 # ---------- relationships and processing ----------
 ROLES = ["child", "parent", "sibling", "spouse", "lover", "kin", "friend", "dependant", "student", "mentor",
          "spiritual", "master", "subordinate", "follower", "comrade", "rival", "enemy", "creditor", "debtor",
-         "symbol"]
-ROLE_OF_KIND = {"kin": "kin", "lover": "lover", "friend": "friend", "mentor": "mentor", "rival": "rival",
+         "symbol", "pet"]
+ROLE_OF_KIND = {"pet": "pet", "kin": "kin", "lover": "lover", "friend": "friend", "mentor": "mentor", "rival": "rival",
                 "enemy": "enemy", "creditor": "creditor", "debtor": "debtor", "master": "master", "group": "comrade",
                 "dependant": "dependant", "cause": "symbol", "object": "symbol", "place": "symbol"}
 
@@ -3371,6 +4314,8 @@ def rel_class(role, loyalty):
         return role
     if role == "symbol":
         return "conceptual"
+    if role == "pet":
+        return "charge" if loyalty >= 3 else "familiar"
     return "stranger"
 
 
@@ -3383,6 +4328,9 @@ def relation_to(n, name, circle_members=()):
         if (t.get("who") or "").lower() == low:
             role = t.get("role") or ROLE_OF_KIND.get(t["kind"], "comrade")
             return (rel_class(role, t["loyalty"]), role, t["loyalty"])
+    kin = kin_of(n, name)
+    if kin:
+        return (rel_class(kin[0], kin[1]), kin[0], kin[1])
     if low in [m.lower() for m in circle_members] and n["name"] in circle_members:
         return ("familiar", "comrade", 2)
     return ("stranger", None, 0)
@@ -3419,7 +4367,8 @@ PROCESSING = {  # how grief and shock show, by processing style: (colour, colour
 GRIEF_DAYS = {"child": (21, 14), "spouse": (14, 14), "lover": (14, 14), "parent": (10, 10), "sibling": (10, 10),
               "dependant": (10, 10), "kin": (7, 7), "friend": (7, 7), "mentor": (7, 7), "spiritual": (10, 10),
               "student": (5, 5), "subordinate": (3, 4), "follower": (3, 4), "comrade": (2, 3), "master": (3, 4),
-              "rival": (1, 3), "creditor": (0, 2), "debtor": (0, 2), "symbol": (7, 7)}
+              "rival": (1, 3), "creditor": (0, 2), "debtor": (0, 2), "symbol": (7, 7),
+              "pet": (4, 7)}
 
 
 # ---------- violence: register, dissonance, responses ----------
@@ -3719,7 +4668,7 @@ def cmd_tie(a):
     t["who"], t["role"], t["label"] = a.to, a.role, a.to
     t["kind"] = {"child": "kin", "parent": "kin", "sibling": "kin", "spouse": "lover", "student": "dependant",
                  "subordinate": "dependant", "follower": "dependant", "spiritual": "mentor", "comrade": "group",
-                 "symbol": "cause"}.get(a.role, a.role if a.role in TIE_KINDS else "friend")
+                 "symbol": "cause", "pet": "pet"}.get(a.role, a.role if a.role in TIE_KINDS else "friend")
     if a.loyalty: t["loyalty"] = a.loyalty
     if a.reach: t["reach"] = a.reach
     save(n, a.file)
@@ -3797,6 +4746,8 @@ def main():
         x.add_argument("--" + fl, action="store_true")
     x.add_argument("--their-strength", type=int, default=2); x.add_argument("--ground", type=int, default=0)
     x.add_argument("--dry-run", action="store_true", help="look without recording that they showed it")
+    x.add_argument("--taste", help="something in the scene that may touch one of their likes or dislikes")
+    x.add_argument("--spirit", choices=["shared", "scorned"], help="the other party shares or scorns what they hold about the unseen")
     x.set_defaults(f=cmd_meet)
     x = sp.add_parser("ask"); x.add_argument("file"); x.add_argument("--who", default="player")
     x.add_argument("--touched", action="store_true"); x.add_argument("--asked", action="store_true")
@@ -3831,7 +4782,8 @@ def main():
     x.add_argument("--reach", type=int, choices=range(1, 7)); x.add_argument("--relabel")
     x.set_defaults(f=cmd_tie)
     x = sp.add_parser("tide"); x.add_argument("world"); x.add_argument("--dials"); x.set_defaults(f=cmd_tide)
-    x = sp.add_parser("audit"); x.set_defaults(f=cmd_audit)
+    x = sp.add_parser("audit"); x.add_argument("--life", action="store_true", help="only family, tastes, pets and outlook")
+    x.set_defaults(f=cmd_audit)
     x = sp.add_parser("learn"); x.add_argument("file"); x.add_argument("--subject", required=True)
     x.add_argument("--claim", required=True); x.add_argument("--source", required=True, choices=list(SOURCE_BASE))
     x.add_argument("--from", dest="source_name"); x.add_argument("--reliability", type=float); x.add_argument("--fact")
