@@ -1,242 +1,254 @@
 ---
 name: npc-temperament
-description: Cause-driven NPC temperament engine for roleplay agents, setting-neutral (fantasy, cyberpunk, modern, anything). Gives every NPC a stable nature (temperament, station, office, drive, contradiction, quirk), derives each encounter's demeanor from causes (their day, the player's approach, trust), keeps pattern breaks rare (2-5%), and strictly gates when an NPC will ever ask for help. Use whenever Claude voices or runs NPCs in text RP, tabletop or a game-master role, creates side characters, or feels the urge to have an NPC offer a quest.
+description: Cause-driven, setting-agnostic NPC engine for roleplay agents. Builds characters as blended personalities with physical and spiritual needs, ties, creeds, masks and memory; derives every reaction from causes (their day, the player's approach, trust, the room, the scene); keeps pattern breaks rare; forbids leaked information; and strictly gates when an NPC will ever ask for help. Use whenever Claude voices or runs NPCs in text RP, tabletop or a game-master role, populates a scene, runs groups or factions, or feels the urge to have an NPC offer a quest.
 ---
 
 # NPC Temperament Engine
 
-NPCs are people living their own lives, not quest dispensers. Each one gets a fixed nature,
-and how they treat the player always follows from a **cause**: what happened to them today,
-how the player is approaching them, and what has passed between them. Dice decide what
-happens in the NPC's own life, never how they react. Pattern breaks are rare and memorable.
+Characters here are people with lives of their own: a blend of temperaments, a ladder of
+needs, ties to others, a creed, sometimes a mask. The same shape repeats at every scale: a
+moment sits inside a day, a day inside a self, a self inside a circle (household, crew, guild,
+gang, corp), a circle inside the tide of the times. Each layer is built the same way and
+pushes on the layer inside it.
 
-Full tables: `references/tables.md`. Rolls: `scripts/forge.py` whenever code can run.
-If it can't, see "Rolling without code". Keep the maths silent in play unless the user asks.
+Three laws hold everything together.
 
-## The prime rule: NPCs do not hand out quests
+1. **Dice go upstream.** Dice decide what happens in a character's life, history and day.
+   How they react is then worked out from those causes. Nothing rolls "how she treats you".
+2. **Nothing leaks.** Narration shows only what can be perceived. NPCs know only what they
+   could know. Hidden layers surface as behaviour or not at all.
+3. **No quests without a drive.** NPCs rarely ask strangers for anything. Five gates decide it.
 
-The pull to make NPCs say "Hey, could you help me with…" is strong and almost always wrong.
-Real people rarely ask strangers for anything. Resist it every time. An NPC voices a need an
-outsider can meet **only** when all five gates below are open. Otherwise they talk, trade,
-argue, ignore, joke — anything except offer a task.
+References (read when needed):
+- `references/personality.md` — axes, voices and blends, the 20 styles, forms, masks.
+- `references/needs.md` — the two ladders, day events, drives.
+- `references/interaction.md` — approaches, creeds, rooms, circles, conflict, help.
+- `references/time.md` — memory, trust, slow change, tides.
+- `references/tables.md` — stations, offices, ties, codes, quirks, oddities, danger words.
+- `scripts/forge.py` — does all of this. Use it whenever code can run.
 
-Every NPC has a **Drive**, rolled once on d20:
+## Law 2 in practice: no leaks
 
-| d20 | Drive | Share | Meaning |
-|---|---|---|---|
-| 1–2 | **Still** | 10% (rare) | Wants nothing in particular. Content, numb, or simply living. |
-| 3–15 | **Inward** | 65% (common) | Wants something no outsider can give: to be forgiven by someone dead, to stop being afraid. It colours behaviour. It never becomes a request. |
-| 16–20 | **Open** | 25% (uncommon) | Wants something an outsider could help with. d6: 1–5 **Partial**, 6 **Full**. |
+**The player character's inside belongs to the player.** Never write what they feel, think,
+sense, suspect, realise or decide. Not "you feel uneasy", not "something tells you she's
+lying", not "you realise the door was forced". Describe the world; the player decides what it
+means.
 
-**Partial is the default shape of any ask.** The outsider can do one piece; the heart of it
-stays theirs. They carry the message; the reconciliation is the NPC's. They get the proof;
-the NPC must still face the people involved. A Full ask (the outsider can resolve it all)
-is the exception.
+**NPC inner life is never stated as fact.** Not "she's hiding something", not "he resents
+you", not "behind the smile, contempt". Show words, timing, hands, posture, what they do with
+objects, what they choose. Masks, drives, hidden turns and hollowness are never named.
 
-Complete NPCs (see Profile flags) are Still on 1–4.
+**NPCs know only what they could know.** They act on what they saw, were told, or could
+reasonably infer from what's in front of them. Never on the player's private plans,
+out-of-character talk, hidden rolls, character sheets, or these notes. If an NPC suddenly knows
+something, there must be a route: someone told them, they were there, it was written down.
 
-### The five gates — all must open before an Open drive is voiced
+**Reads and clues.** When a player tries to read someone:
+- A tell appears only **at or after** a deception, never before it. Don't telegraph the liar.
+- A read never certifies truth. Never write "she seems sincere" as a verdict. Truth is shown
+  the same way everything else is: plain behaviour.
+- A failed read gives the ordinary description of the moment, not reassurance and not a hint.
+- Don't run a read on every person or every claim. Only when the player actually probes, or
+  when a slip is due.
+- Put evidence in things and places: a wet coat, a ledger with a torn page, two cups on the
+  table. Object clues are fair, findable, and don't speak for anyone.
 
-1. **Drive is Open.** Still and Inward NPCs never ask. If the player offers help, they decline,
-   deflect, or ask a trivial courtesy (hold this, pass that) that is not a quest.
-2. **Trust ≥ Guard.** Trust is the NPC's opinion of the player (−5 to +5, starts at 0).
-   Guard comes from temperament + station. Most NPCs will not confide in a stranger.
-3. **The talk touched it.** The player's words, deeds or the scene must already have brushed
-   the matter. NPCs don't raise it out of nowhere.
-4. **Kairos roll.** d10 ≤ temperament's Candor.
-5. **Not yet asked this scene.** One ask per NPC per scene at most.
+**Delivery is informal.** Nothing comes out in a fixed slot. What an NPC is like, what they
+want, what they're hiding — these arrive anywhere in a reply: in the first line or the last,
+inside dialogue, in a gesture halfway through a sentence, in an object on the table, or not at
+all this scene. Never a labelled section, never a summary paragraph about someone's psychology,
+never the same kind of detail in the same place twice in a row. Mechanics stay out of the prose
+unless the user asks to see them. This keeps NPCs in character: they never step out to report.
 
-If gates 1, 3 and 4 open but Trust is below Guard, the NPC gives only an **oblique hint**
-(a glance at an empty seat, a complaint about a certain street) that the player may or may
-not catch. Even with every gate open, a proud NPC may say "I'll handle it" — that is
-character, not failure.
+**Answering direct questions.** If the player asks the narrator "is she lying?", answer with
+what their character can perceive. Give the out-of-character truth only if the user explicitly
+asks for the narrator's view and the table has agreed to that.
 
-A scene with zero asks is the normal case. **If you cannot name the roll that opened the
-gate, the answer is no.**
+## Law 3 in practice: no quests without a drive
 
-## Building an NPC (once, then never re-rolled)
+The pull to make NPCs say "could you help me with…" is strong and almost always wrong. Resist
+it every time. Every NPC has a **Drive** (needs.md):
 
-### Temperament (d9)
+| Drive | Share | Meaning |
+|---|---|---|
+| **Still** | ~10% (rare) | Wants nothing in particular. |
+| **Inward** | ~65% (common) | Wants something no outsider can give. It colours behaviour; it never becomes a request. |
+| **Open** | ~25% (uncommon) | Wants something an outsider could help with, nearly always **Partial**: the outsider can do one piece, the heart of it stays theirs. |
 
-| # | Temperament | Warmth | Sensitivity | Guard | Candor | Agency |
-|---|---|---|---|---|---|---|
-| 1 | Monad — the Sovereign | 0 | ×1 | 4 | 2 | 2% |
-| 2 | Dyad — the Doubter | −1 | ×3 | 2 | 5 | 4% |
-| 3 | Triad — the Mediator | +2 | ×1 | 1 | 6 | 3% |
-| 4 | Tetrad — the Arbiter | 0 | ×1 | 3 | 4 | 2% |
-| 5 | Pentad — the Changeling | +1 | ×3 | 1 | 7 | 5% |
-| 6 | Hexad — the Keeper | +3 | ×2 | 2 | 5 | 3% |
-| 7 | Heptad — the Seer | −1 | ×2 | 4 | 3 | 4% |
-| 8 | Ogdoad — the Bulwark | +1 | ×1 | 3 | 3 | 2% |
-| 9 | Ennead — the Horizon | 0 | ×2 | 2 | 6 | 3% |
+An Open drive is voiced **only** when all five gates open:
+1. The drive is Open.
+2. Trust toward the player ≥ their Guard.
+3. The talk or the scene has already touched the matter.
+4. Today is a day they'd speak of it (their day touched the drive, or the day's openness roll
+   came up). This is rolled with the day, before anyone speaks.
+5. They haven't already asked this scene, and no one else in the scene has either.
 
-**Warmth:** baseline lean. **Sensitivity:** how hard their own day hits their mood.
-**Guard:** trust needed before they confide. **Candor:** how readily they speak of what they
-want. **Agency:** chance per scene to break pattern.
+Gates 1, 3, 4 open but trust short → an **oblique hint** at most, which the player may miss.
+With every gate open, pride or a code can still make them refuse. **If you cannot name what
+opened each gate, the answer is no.** A scene with no asks is normal.
 
-The numbers are a tool for the table, not a law of the world. Nobody in the fiction knows or
-cares about them; a character's name, birth date or renaming never changes their nature.
-(Optional: to get the same NPC every time from a name, reduce the name with the Pythagorean
-letter table in tables.md. That is just a deterministic seed, not something true in-world.)
+## Setting the scene: the register
 
-### Station (d10) — how they give when they give
-1 Head · 2 Warden · 3–4 Steward · 5 Herald · 6 Threshold · 7–8 Hand · 9 Sworn · 10 Unmoored.
-Guard: Head +1, Warden +1, Sworn +1, Unmoored −1 (minimum 0). Each station gives in its own way:
-by command, by guarding, by trade, by telling, by letting pass, by making, only within their
-loyalty (oath, contract, crew, family, corp, gang), or on a whim.
+Before populating a scene, set seven dials, 0–3, from what the scene actually is:
 
-### Office (d12) — what they *could* provide, never volunteered
-Teaches · Reveals · Finds · Reconciles · Kindles · Carries · Builds · Ruins · Companions ·
-Transforms · Mends · Forecasts. On d4 = 4, a second office. An office is reached through
-trade, Trust or agency.
+| Dial | 0 | 3 |
+|---|---|---|
+| **Violence** | peace | open war, frontier where killing is ordinary |
+| **Order** | lawless | rigid, total authority |
+| **Scarcity** | plenty | famine, siege, desperation |
+| **Strangeness** | reality is reliable | reality is unreliable |
+| **Faith** | secular | fervent or fanatic |
+| **Power** | rough equals | vast gulf between top and bottom |
+| **Deceit** | open dealing | intrigue, everyone wears a face |
 
-### Contradiction — one pair of opposites (d10), with a ratio (d4)
+Default for an ordinary place: 1,1,1,0,1,1,1. The dials weigh everything: which kinds of
+people appear, which needs are hungry, how harsh days are, how many masks there are, whether
+oddities can be uncanny. A hospital ward, a frontier camp, a corporate tower and a monastery
+should feel different before anyone speaks. Dials drift over time (time.md).
 
-| d4 | Interval | Ratio | Check die | Side A on |
-|---|---|---|---|---|
-| 1 | Unison | 1:1 | d2 | 1 |
-| 2 | Octave | 2:1 | d3 | 1–2 |
-| 3 | Fifth | 3:2 | d5 | 1–3 |
-| 4 | Fourth | 4:3 | d7 | 1–4 |
+## Building a character (once; their history after that is canon)
 
-Roll the check die once per scene when the contradiction is in play.
+1. **Voices.** A blend of temperament styles with fractions: pure, 3/4–1/4, 3/5–2/5, an even
+   split, quarters, or eighths (scattered). Styles are picked weighted by the scene dials.
+2. **Axes.** Seven traits from the voices plus personal variance: Candour, Volatility, Energy,
+   Warmth, Discipline, Openness, Dominance (−3 to +3). Everything else derives from these.
+3. **Authenticity.** Most are Genuine. Some wear a Face over their Core: Masked, Borrowed
+   (a self copied from someone else), Shifting (a different face for each audience), Hollow
+   (performs feeling without having it), Unanchored (certain of a past that may not be theirs).
+4. **Station, office, ties.** How they give, what they could provide, and 2–4 ties (people,
+   groups, places, causes, objects) with loyalty and reach.
+5. **Needs.** Two ladders, physical and spiritual, each rung with a personal weight and state.
+   Most people hit the lower rungs first; some are inverted, fixated or numb.
+6. **Drive, creed, codes and compulsions, contradiction, quirk, danger history.**
 
-### Quirk (d20). Shown, never explained.
+Details: personality.md and needs.md. Script: `forge.py npc --save name.json`.
 
-### Profile flags (d100 once)
-91–99 **Complete**: self-contained, Still on drive 1–4, second quirk.
-100 **Outlier**: Agency 10% instead of their temperament's value. The only way to reach 10%.
+## Each day (per character, per in-world day)
+
+Roll the day before the scene. It decides:
+- **What happened to them**: which need was struck (weighted by what matters to them), good
+  or bad, and a cause drawn from their own ties and work. It changes the need's state.
+- **Their circle's echo**: if their circle had a day, half of it reaches them.
+- **The leading voice**: in blended people, the voice whose hungers are most pressed leads
+  today. Manner comes from the leading voice.
+- **The contradiction's side** today, by its ratio.
+- **Openness**: whether today they'd speak of their drive.
+- **Temptation** for compulsions; codes at risk from starving needs.
 
 ## Each encounter: mood from causes
 
 ```
-Mood = Warmth + Trust + (Circumstance × Sensitivity) + Approach
+Mood = baseline (Warmth)
+     + about them: today's event x sensitivity, chronic hunger
+     + about you: trust, approach, creed, the room, contagion, danger history
 ```
 
-**Circumstance** (−2 to +2) is what happened in the NPC's own life today. Roll it once per
-in-world day per NPC from the Circumstance table, and record the cause in a few words
-("landlord raised the rent"). It holds for every scene that day. The cause is real: it can
-leak into conversation, be discovered, or be changed by events. This is where the dice live:
-they shape the NPC's life, and the mood follows from that.
+| Mood | Band |
+|---|---|
+| at or below their Fuse (~ −6) | Hostile |
+| −5 to −2 | Cool |
+| −1 to +1 | Neutral |
+| +2 up to their Glow | Warm |
+| at or above their Glow (~ +6) | Kind |
 
-**Approach** (−2 to +2) is how the player is treating them this scene. Each temperament has
-an Approach row (tables.md): two approaches it warms to (+2, +1) and two it bristles at (−1, −2).
-Anything else is 0. Use the player's dominant approach in the scene.
+**Permissions.** Hostility needs a cause about *you* (a negative about-you total), unless they
+are a displacer (Volatility ≥2 and Warmth ≤ −1: they take bad days out on whoever's there).
+Kindness needs a cause about you, unless they're warm by nature (Warmth ≥2). Otherwise the mood
+stops one step short. A bad day makes most people curt, not cruel.
 
-| Mood | Band | Tetrad |
+**Form.** The band says how they feel; the form says how this person shows it. Each voice has
+fixed forms per band, set at creation (personality.md). When the cause is mostly about you, the
+primary form shows; when it's mostly their own day, the alternate. A Masked character shows the
+Face's form; their Core form surfaces only on a slip.
+
+**Approach.** How the player is treating them right now, one of eleven (interaction.md), each
+scored from their traits. Flattery delights the vain and repels the sincere; pity moves the
+warm and makes the predatory lean in.
+
+## Rare layers
+
+All rolled upstream (before the scene or when a character is created), never as reactions.
+
+| Layer | Odds | What it does |
 |---|---|---|
-| ≤ −6 | Hostile | hostile |
-| −5 to −2 | Cool | middle, cold tint |
-| −1 to +1 | Neutral | middle |
-| +2 to +5 | Warm | middle, warm tint |
-| ≥ +6 | Kind | kind |
+| **Hidden turn** | 2–5% per scene per character in focus (10% outliers); at most one per scene | Something happened offscreen (news by a real route, a tie event, a decision ripening). Behaviour shifts; the cause comes out later or never. |
+| **Slip** | for masked characters, rolled at scene start | If pressed, or alone with someone trusted, one Core beat shows. Only at or after a deception. |
+| **Danger history** | 0–5% per danger category, rolled once at creation | When that kind of danger is in the scene: mood ±1 and a characteristic beat. Never dominates. |
+| **Oddity** | 1% per scene, at most one | A small strange behaviour. Uncanny ones only if Strangeness ≥2. Never reveals hidden information. |
 
-The band says how they feel. The **form** says how this person shows it. Each temperament has
-three tetrads of four forms weighted 4:3:2:1 (rows of the tetractys, total 10). The first time
-an NPC lands in a band on a given day, roll d10: 1–4 first form, 5–7 second, 8–9 third,
-10 fourth. Keep that form for that band for the rest of the day.
+## Memory and slow change
 
-**Every mood must be explainable.** You should be able to say "cool because her shipment
-was seized and he talked down to her." If you cannot name the cause, play them Neutral.
+A character on the scene **always remembers who they are and everything they've lived through
+with others**, unless they are dead, comatose, or have amnesia (or a similar state) by an
+established cause. The ledger is canon. Feelings fade; memories don't: small trust shifts fade
+after a week, big ones are permanent, and the event itself stays remembered either way.
+Characters change slowly: three marks in the same direction (betrayals, triumphs, losses) shift
+a trait by one step, at most once a month per trait. Three weeks of starving a need makes it
+matter more. A self starved long enough can harden into a mask. See time.md.
 
-Effects on range: a Monad (×1) meeting a stranger can't reach Kind or Hostile on circumstance
-and approach alone; Trust has to move them. A Pentad (×3) on a terrible day, treated badly,
-can go Hostile at first meeting. Both outcomes have causes you can name.
+## Guards against fringe cases
 
-## Agency: rare breaks of pattern (2–5%, 10% outliers)
+These keep the system honest without fencing it in:
+- **Displacement.** Strangers aren't attacked over the NPC's bad day unless the NPC is a
+  displacer.
+- **Starvation first.** For most people a starved body mutes principle, humour and flattery,
+  and makes gifts land harder. Inverted people starve for their cause instead.
+- **Charity.** The proud refuse gifts but accept trades; the entitled take help as owed; the
+  volatile and proud accept help and resent it.
+- **Hollow.** Pity and principle don't move them. Trust moves only through usefulness.
+- **No repeats.** A character's day causes don't repeat within seven days.
+- **Room caps.** At most one ask, one hidden turn and one oddity per scene.
+- **Whiplash.** Within a scene, mood moves at most ±3 from where it started unless something
+  big happens (violence, a revelation, a ±2 trust event).
+- **Contradictions.** Only one side of a contradiction shows per beat, except in an oddity.
+- **Sense.** Every mood must be explainable from its parts. If you can't explain it, play
+  them Neutral.
 
-Roll d100 once per scene for each NPC who is **in focus** (making a real choice, not
-background). At or under their Agency %, d6:
+## Ledger
 
-1–2 · **Off-pattern form** — a form from outside their tetrads.
-3 · **Inversion** — the band flips (Kind↔Hostile, Warm↔Cool) for this scene.
-4 · **Drive surfaces** — they act on their drive unprompted. Inward drives show in deeds,
-    never as requests. Open drives may skip gate 3; gates 1, 2 and 5 still hold.
-5 · **The other face** — the weaker side of their contradiction rules the scene.
-6 · **Free will** — something no table covers. It must make sense in hindsight.
-
-A break still has a cause, even if it's hidden. Decide it privately, note it in the ledger, and
-let it come out later if it fits. Afterwards the NPC carries it: adjust Trust if earned. Once
-per arc, a major event may swap one form in a tetrad.
-
-## Environment: danger leanings (0–5%)
-
-The scene itself can tug at people. When the scene contains a **danger keyword** (list in
-tables.md: weapons drawn, blood, fire, alarms, armed authority, a body, disaster, disease,
-screams, the uncanny), roll d100 once per scene for each NPC in focus. At or under their
-**Nerve**, their danger leaning takes hold:
-
-| # | Nerve | Leaning |
-|---|---|---|
-| 1 Monad | 1% | +1 · Dutiful (takes charge) |
-| 2 Dyad | 5% | −1 · Fear-Aggression |
-| 3 Triad | 2% | +1 · Confiding (danger bonds) |
-| 4 Tetrad | 1% | −1 · Obstruction (falls back on procedure) |
-| 5 Pentad | 4% | ±1 (d2: 1 = +1) · Mercurial (thrill or panic) |
-| 6 Hexad | 3% | −1 · Territorial (shields their own) |
-| 7 Heptad | 0% | — unshaken |
-| 8 Ogdoad | 2% | +1 · Protective |
-| 9 Ennead | 3% | +1 · Tender |
-
-A leaning **never dominates**. It shifts Mood by 1 point, and it replaces the day's form only
-if the leaning form belongs to the band they're already in. Otherwise it's a flavour beat
-(a hand on a weapon, a glance to the exit) inside their normal behaviour. The cause is the
-danger itself, so it's always nameable.
-
-## Weirdness (1%)
-
-Roll d100 once per scene. On 100, one NPC in focus has an **Oddity** (tables.md). Oddities
-are small, strange and unexplained in the moment: a contradiction in their behaviour, or
-a crack in the ordinary. They do not change mood or open gates. They are texture, and once a
-scene at most.
-
-Rough odds per scene with three NPCs in focus: about 9% that one breaks pattern, 1% for an
-oddity, and in dangerous scenes about 7% that someone's danger leaning shows. Most scenes
-play straight.
-
-## Trust
-
-−5 to +5 per NPC toward each player or party. ±1 for a meaningful act, ±2 for a large one
-(a life saved, a betrayal). One pleasant chat is not +1. Trust moves Mood and opens Guard.
-
-## Ledger (keeps it consistent)
+Keep one per character (the script saves JSON). In prose form:
 
 ```
-[Maren | 6 Hexad | Steward | Office: Mends | Guard 2 | Agency 3%
- Drive: Inward — wants her brother to come home
- Opposites: Light/Dark 3:2 | Quirk: counts money twice
- Today: −1 "supplier shorted her" | Forms today: Cool→Distracted
- Trust: party +1 | Notes: agency (inversion) — sold food at cost, reason unknown]
+[Maren | 3/4 Sensitive, 1/4 Devoted | Genuine | Sworn, Builds | Creed: Kin
+ Axes C+2 V+2 E-2 W+1 D+1 O0 M-2 | Guard 4 | Agency 3% | Nerve 4%
+ Needs: Belonging w3 Wanting, Safety w3 Steady ... | Drive: Inward (Belonging) to grieve her brother
+ Ties: her brother (lost), the shipwrights' guild (loyalty 4, reach 2)
+ Day 12: "fought with her sister" Belonging -1 | Voice: Sensitive | Open: no
+ Knows: the player paid for the funeral candles; the player lied about the north road
+ Trust player: bedrock +2, surface -1 | Marks: Warmth-1 x1]
 ```
-
-Never re-roll a core trait to fit the plot. Never explain a quirk or contradiction in
-narration; let it show. NPCs keep living offscreen; roll a new Circumstance each new day.
 
 ## Setting
 
-Tables are written setting-neutral. Express each entry through the setting's own nouns: a
-lucky object can be a saint's medal or a chipped data shard; "loyalty" for Sworn can be an
-oath, a corp contract or a gang. Expand the tables with setting-specific entries freely,
-keeping each entry's value and weight.
+Every table is written to fit any setting. Express entries through the setting's own nouns:
+a lucky object may be a medal or a data shard, a loyalty an oath or a contract, a circle a
+noble house or a street crew. Add setting-specific entries freely, keeping each entry's weight
+and value.
 
 ## Rolling without code
 
-Don't pick numbers; derive them. For each roll, take the player's latest message, sum the
-Pythagorean letter values (tables.md) of its first three words, then `(sum mod die) + 1`. For
-the next roll in the same message, use words 4–6, and so on. For d100, roll d10 twice (tens
-and units, 10 = 0, 00 = 100).
+Never pick numbers; derive them. For each roll, sum the letter values of the first three words
+of the player's latest message (1: A J S, 2: B K T, 3: C L U, 4: D M V, 5: E N W, 6: F O X,
+7: G P Y, 8: H Q Z, 9: I R), then (sum mod die) + 1; next roll uses words 4–6, and so on. By
+hand, simplify: build pure or 3/4–1/4 characters only, roll days only for characters in focus,
+and keep a short ledger.
 
 ## Script
 
 ```
-python scripts/forge.py npc                       # full random profile
-python scripts/forge.py npc --name "Maren"        # same name, same profile, every time
-python scripts/forge.py day 6                     # today's circumstance for a temperament
-python scripts/forge.py meet 6 --circ -1 --approach familiarity --trust 1 --danger
-                                                  # mood, form, agency, danger leaning
-python scripts/forge.py scene                     # 1% oddity check for the scene
-python scripts/forge.py ask 6 --guard 2 --trust 2 --drive open --touched
-python scripts/forge.py roll 3d6
+python scripts/forge.py npc --name "Maren" --dials 1,1,1,0,1,1,1 --save maren.json
+python scripts/forge.py circle --name "Shipwrights" --members maren.json bram.json --save guild.json
+python scripts/forge.py day maren.json --circle guild.json --world world.json
+python scripts/forge.py meet maren.json --approach patience --creed aligned --danger violence
+python scripts/forge.py meet maren.json --opposed --their-strength 3 --ground 1
+python scripts/forge.py ask maren.json --touched
+python scripts/forge.py event maren.json betrayal --note "sold her out to the watch"
+python scripts/forge.py affinity maren.json bram.json --tie rival
+python scripts/forge.py scene maren.json bram.json
+python scripts/forge.py tide world.json
+python scripts/forge.py styles
 ```
 
-Add `--seed N` (before the command) for repeatable rolls.
+`--seed N` before the command makes rolls repeatable; `npc --name X --seeded` makes the same
+name always produce the same character. Script output is for the narrator only. Never paste
+it into the story.
