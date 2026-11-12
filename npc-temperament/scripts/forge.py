@@ -470,6 +470,9 @@ def build(dials, name=None, kind="person"):
     rn, die, amax = RATIO[d(4)]
     n["contradiction"] = {"pair": OPPOSITES[d(10) - 1], "ratio": rn, "die": die, "a_max": amax}
     n["quirks"] = random.sample(QUIRKS, 2 if n["flags"]["complete"] else 1)
+    if ak == "Hollow" and n["drive"]["rung"]:
+        n["drive"]["text"] = n["drive"]["text"].replace("someone they love", "someone useful to them").replace(
+            "to be loved back", "to be treated as if loved")
     derive(n)
     # danger scars: rolled once per category, permanent history
     n["scars"] = {}
