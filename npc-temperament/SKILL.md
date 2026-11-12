@@ -198,6 +198,8 @@ These keep the system honest without fencing it in:
   and makes gifts land harder. Inverted people starve for their cause instead.
 - **Charity.** The proud refuse gifts but accept trades; the entitled take help as owed; the
   volatile and proud accept help and resent it.
+- **Pain breaks faces.** Someone badly hurt, in agony or in mortal fear shows their Core, not
+  their Face, and drops all levity (no flirting, boasting, joking or performing).
 - **Hollow.** Pity and principle don't move them. Trust moves only through usefulness.
 - **No repeats.** A character's day causes don't repeat within seven days.
 - **Room caps.** At most one ask, one hidden turn and one oddity per scene.

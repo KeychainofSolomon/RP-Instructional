@@ -95,6 +95,8 @@ How it plays:
   checklist. Never narrate the gap itself.
 - **Slip**: at scene start, roll d10 ≤ Slip. If it hits and the character is pressed, scared,
   or alone with someone they trust, one beat shows the Core form. Only at or after a lie.
+- **Pain breaks faces**: badly hurt, in agony or in mortal fear, anyone shows their Core and
+  loses all levity. A hollow person in pain shows the flatness under the performance.
 - **Hollow tells**: correct words at slightly wrong times; no reaction where one is expected
   (an animal hurt, a child crying); precise mimicry of others' gestures. The character may
   not know.

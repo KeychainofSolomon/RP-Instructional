@@ -18,6 +18,7 @@ CREEDS = ["Strength", "Gain", "Excellence", "Pleasure", "Thrill", "Freedom",
           "Mercy", "Justice", "Kin", "Faith", "Order", "Security"]
 APPROACHES = ["deference", "familiarity", "bluntness", "flattery", "haggling", "humour",
               "patience", "pressure", "generosity", "principle", "pity"]
+LEVITY = ("Flirtatious", "Boastful", "Performing", "Bargaining-Humour", "Gossipy", "Teasing-Fond")
 BANDS = ["Hostile", "Cool", "Neutral", "Warm", "Kind"]
 DANGER = ["violence", "injury", "disaster", "authority", "contagion", "uncanny"]
 
@@ -825,12 +826,17 @@ def cmd_meet(a):
     voice = next(v for v in n["voices"] if v["style"] == td["voice"])
     au = n["authenticity"]
     shown = voice["manner"]
-    if au["kind"] in ("Masked", "Hollow", "Borrowed") and au["faces"]:
+    if a.hurt:
+        pass  # pain, terror, mortal danger to themself: no one can hold a face
+    elif au["kind"] in ("Masked", "Hollow", "Borrowed") and au["faces"]:
         shown = au["faces"][0]["manner"]
     elif au["kind"] == "Shifting" and au["faces"]:
         shown = au["faces"][(d(2) - 1) if not a.audience else 0]["manner"]
     use_alt = abs(about_them) > abs(about_you)
     form = shown[tetrad_key(band)][1 if use_alt else 0]
+    if a.hurt and form in LEVITY:
+        other = shown[tetrad_key(band)][0 if use_alt else 1]
+        form = other if other not in LEVITY else "Withdrawn"
     core_form = voice["manner"][tetrad_key(band)][1 if use_alt else 0]
     print("[narrator only] %s toward %s" % (n["name"], a.who))
     print("Mood %+d = baseline %+d, their day %+d (%s), chronic %+d, trust %+d, approach %+d, creed %+d, "
@@ -839,6 +845,8 @@ def cmd_meet(a):
     tint = {"Cool": ", colder tint", "Warm": ", warmer tint"}.get(band, "")
     print("Band: %s -> shows as %s%s (cause leans on %s)" % (band, form, tint,
                                                             "their own day" if use_alt else "you"))
+    if a.hurt:
+        print("Hurt or in mortal fear: any face drops, levity is gone. What shows is who they are.")
     if shown is not voice["manner"]:
         print("Core underneath: %s (%s). Surfaces only on a slip, and never before there is something to hide."
               % (core_form, au["kind"]))
@@ -1066,6 +1074,7 @@ def main():
     x.add_argument("--lead", choices=["warm", "hostile"]); x.add_argument("--rival-of-lead", action="store_true")
     x.add_argument("--contagion", type=int, choices=[-1, 1]); x.add_argument("--danger", nargs="*", choices=DANGER)
     x.add_argument("--audience", action="store_true"); x.add_argument("--opposed", action="store_true")
+    x.add_argument("--hurt", action="store_true")
     x.add_argument("--their-strength", type=int, default=2); x.add_argument("--ground", type=int, default=0)
     x.set_defaults(f=cmd_meet)
     x = sp.add_parser("ask"); x.add_argument("file"); x.add_argument("--who", default="player")
