@@ -475,9 +475,12 @@ def build(dials, name=None, kind="person"):
     for _ in range(0 if cc <= 3 else 1 if cc <= 5 else 2):
         ctrl = [6, 9, 12, 15][d(4) - 1]
         if d(2) == 1:
-            n["codes"].append({"code": random.choice(CODES), "control": ctrl})
+            n["codes"].append({"code": random.choice([x for x in CODES if x not in [c["code"] for c in n["codes"]]]),
+                               "control": ctrl})
         else:
-            n["compulsions"].append({"urge": random.choice(COMPULSIONS), "control": ctrl,
+            n["compulsions"].append({"urge": random.choice([x for x in COMPULSIONS
+                                                            if x not in [c["urge"] for c in n["compulsions"]]]),
+                                     "control": ctrl,
                                      "threshold": ctrl // 3, "pressure": 0})
     rn, die, amax = RATIO[d(4)]
     n["contradiction"] = {"pair": OPPOSITES[d(10) - 1], "ratio": rn, "die": die, "a_max": amax}
@@ -629,6 +632,12 @@ def cmd_circle(a):
         show(n)
     else:
         ms = [load(p) for p in a.members]
+        dead = [m["name"] for m in ms if m["condition"] == "dead"]
+        ms = [m for m in ms if m["condition"] != "dead"]
+        if dead:
+            print("Left out (dead): " + ", ".join(dead))
+        if not ms:
+            sys.exit("A circle needs at least one living member.")
         wts = [RANK.get(m["station"], 0) + 1 for m in ms]
         tot = sum(wts)
         n = build(dials, a.name, "circle")
@@ -1133,6 +1142,8 @@ def cmd_meet(a):
     n = load(a.file)
     if n["condition"] in ("dead", "comatose"):
         sys.exit("%s is %s." % (n["name"], n["condition"]))
+    if (a.who or "").strip().lower() == n["name"].lower():
+        sys.exit("%s can't meet themself." % n["name"])
     dv = n["derived"]
     st, order = n["needs"]["state"], n["needs"]["order"]
     td = n.get("today") or {"mood": 0, "voice": n["voices"][0]["style"], "side": "A", "cause": "no day rolled"}
@@ -1663,6 +1674,8 @@ def cmd_event(a):
 
 def cmd_affinity(a):
     x, y = load(a.a), load(a.b)
+    if x["name"] == y["name"] and x.get("axes") == y.get("axes"):
+        sys.exit("Regard needs two different people.")
     parts = []
     if "Nothing" in (x["creed"], y["creed"]):
         cs = 1 if x["creed"] == y["creed"] else -2 if "Faith" in (x["creed"], y["creed"]) else 0
@@ -1683,13 +1696,21 @@ def cmd_affinity(a):
            "debtor": 0, "master": 0, "dependant": 1}.get(a.tie or "", 0)
     parts.append(("tie " + (a.tie or "none"), tie))
     total = clamp(sum(p[1] for p in parts), -5, 5)
-    print("Regard %s <-> %s: %+d  (%s)" % (x["name"], y["name"], total,
+    print("Regard %s <-> %s: %+d (%s)" % (x["name"], y["name"], total,
                                           ", ".join("%s %+d" % p for p in parts)))
     print("Use it as trust between them; each still reacts through their own mood and manner.")
 
 
 def cmd_scene(a):
-    ns = [load(p) for p in a.files]
+    pairs = [(p, load(p)) for p in a.files]
+    gone = [n["name"] for _, n in pairs if n["condition"] in ("dead", "comatose")]
+    pairs = [(p, n) for p, n in pairs if n["condition"] not in ("dead", "comatose")]
+    if gone:
+        print("Not taking part: %s (dead or comatose)" % ", ".join(gone))
+    if not pairs:
+        sys.exit("No one present can take part.")
+    a.files = [p for p, _ in pairs]
+    ns = [n for _, n in pairs]
     dials = load(a.world)["dials"] if a.world else (ns[0]["dials"] if ns else list(DEFAULT_DIALS))
     lead = max(ns, key=lambda n: n["axes"][M] + n["axes"][E] + RANK.get(n["station"], 0))
     print("[narrator only] Lead of the room: %s" % lead["name"])
@@ -1996,9 +2017,16 @@ def incline(n, key, axes=None, times=1):
     rec["last"] = n["day"]
     if before < 0.5 <= rec["strength"]:
         notes.append("%s has become a habit: it fills the gaps when nothing else decides" % key)
-    if rec["strength"] >= 0.7 and not any(c.get("from_habit") == key for c in n["compulsions"]):
+    same = [c for c in n["compulsions"] if c["urge"].lower() == key.lower() or c.get("from_habit") == key]
+    if rec["strength"] >= 0.7 and not same:
         n["compulsions"].append({"urge": key, "control": 9, "threshold": 3, "pressure": 0, "from_habit": key})
         notes.append("%s has become a compulsion (control 9)" % key)
+    elif rec["strength"] >= 0.7 and same and not same[0].get("fed_by_habit"):
+        c0 = same[0]
+        c0["control"] = max(6, c0["control"] - 3)
+        c0["threshold"] = c0["control"] // 3
+        c0["fed_by_habit"] = True
+        notes.append("the old pull of %s grows stronger (control %d)" % (key, c0["control"]))
     if key in INDULGENT and rec["strength"] >= 0.5:
         h = affect(n)["habit"]
         was = h.get("pleasure", 0.0)
@@ -2041,7 +2069,13 @@ def habit_form(n, band_key, active):
 
 def cmd_habit(a):
     n = load(a.file)
-    key = a.act.strip().lower()
+    key = " ".join(a.act.split()).lower()
+    if not key:
+        sys.exit("Name the act (drinking, praying, fighting, or anything else).")
+    if a.times < 1:
+        sys.exit("--times must be 1 or more.")
+    if n["condition"] in ("dead", "comatose"):
+        sys.exit("%s is %s." % (n["name"], n["condition"]))
     notes = incline(n, key, ACT_AXES.get(key), a.times)
     rec = n["inclinations"][key]
     save(n, a.file)
@@ -2454,7 +2488,13 @@ def place_dissonance(pl, k):
 
 
 def cmd_violence(a):
-    ns = [load(p) for p in a.files]
+    pairs = [(p, load(p)) for p in a.files]
+    gone = [n["name"] for _, n in pairs if n["condition"] in ("dead", "comatose")]
+    pairs = [(p, n) for p, n in pairs if n["condition"] not in ("dead", "comatose")]
+    if gone:
+        print("Not responding: %s (dead or comatose)" % ", ".join(gone))
+    a.files = [p for p, _ in pairs]
+    ns = [n for _, n in pairs]
     pl = load(a.place) if a.place else None
     dials = parse_dials(a.dials) if a.dials else (load(a.world)["dials"] if a.world else
                                                   (pl["dials"] if pl and pl.get("dials") else
@@ -2473,7 +2513,8 @@ def cmd_violence(a):
     now, keeps = random.choice(AFTERMATH)
     print("Aftermath: " + now)
     if pl is not None:
-        pl.setdefault("marks", []).append(keeps)
+        if keeps not in pl.setdefault("marks", []):
+            pl["marks"].append(keeps)
         pl.setdefault("history", []).append(now)
         save(pl, a.place)
         print("The place keeps: " + keeps)
@@ -2521,6 +2562,10 @@ def cmd_place(a):
 
 def cmd_tie(a):
     n = load(a.file)
+    if not a.to.strip():
+        sys.exit("Name who or what the tie is to.")
+    if a.to.strip().lower() == n["name"].lower():
+        sys.exit("A tie needs someone or something other than themself.")
     t = next((t for t in n["ties"] if (t.get("who") or "").lower() == a.to.lower()), None)
     if t is None and a.relabel:
         t = next((t for t in n["ties"] if t["label"] == a.relabel), None)
