@@ -1189,7 +1189,10 @@ def cmd_meet(a):
         members = load(a.circle).get("members", []) if a.circle else []
         vcls = relation_to(n, a.victim, members)[0]
         acls = relation_to(n, a.attacker, members)[0]
-        resp = violence_response(n, a.hurt, vcls, acls, a.symbol)
+        if a.attacker and a.attacker.lower() == n["name"].lower() and not a.hurt:
+            resp = attacker_response(n, vcls)
+        else:
+            resp = violence_response(n, a.hurt, vcls, acls, a.symbol)
         steady = violence_steady(n, resp, n["dials"], vcls)
         if n.get("today"):
             n["today"]["shaken"] = None if steady else resp
@@ -1429,6 +1432,8 @@ def cmd_audit(a):
                     except Exception as e:
                         problems.append("response crash %s/%s: %s" % (vc, ac, e)); continue
                     if r not in RESP: problems.append("unknown response %s" % r)
+                    ar = attacker_response(n0, vc)
+                    if ar not in RESP: problems.append("unknown attacker response %s" % ar)
                     if vc in CLOSE and not hurt and violence_steady(n0, r, [0] * 7, vc) and r != "Performed":
                         problems.append("steady while someone close is hurt: %s (%s)" % (r, vc))
                     if not hurt and vc in ("beloved", "charge") and ac not in CLOSE and r in ("Satisfied", "Spectator", "Curiosity", "Business"):
@@ -2482,17 +2487,17 @@ DISSONANCE = [  # fallback only: a place sheet is the real source
  "the light on the wall is lovely", "someone keeps counting money, losing their place, starting again",
  "someone hums a lullaby without knowing they are doing it", "a kettle starts to whistle",
 ]
-PLACE_KINDS = {  # how a place's own fixtures turn dissonant
- "sound": ["{x} goes on, exactly on time", "{x} doesn't stop"],
- "light": ["{x} is lovely", "{x} falls across all of it the same"],
- "animal": ["{x} go about their business", "{x} come to look, then lose interest"],
- "routine": ["{x} happens anyway, on schedule", "someone starts on {x} out of habit"],
- "object": ["{x} sits there, untouched", "someone straightens {x}"],
- "smell": ["{x} is still in the air", "{x} cuts through everything"],
- "taste": ["{x} is still on the tongue", "{x} in the mouth, under everything"],
- "person": ["{x} keeps at what they were doing", "{x} looks up, then back down"],
- "weather": ["{x} goes on outside", "{x} doesn't care"],
- "mark": ["{x}, still", "{x}; nobody mentions it"],
+PLACE_KINDS = {  # how a place's own fixtures turn dissonant (no verbs that must agree with the noun)
+ "sound": ["{x}, going on exactly on time", "{x}, not stopping"],
+ "light": ["{x}, lovely", "{x}, falling across all of it the same"],
+ "animal": ["{x}, going about their business", "{x}, coming to look, then losing interest"],
+ "routine": ["{x}, happening anyway, on schedule", "someone starting on {x} out of habit"],
+ "object": ["{x}, untouched", "someone straightening {x}"],
+ "smell": ["{x}, still in the air", "{x}, cutting through everything"],
+ "taste": ["{x}, still on the tongue", "{x} in the mouth, under everything"],
+ "person": ["{x}, keeping at what they were doing", "{x}, looking up, then back down"],
+ "weather": ["{x}, going on outside", "{x}, not caring"],
+ "mark": ["{x}, still", "{x}, and nobody mentioning it"],
 }
 AFTERMATH = [  # (what happens now, what the place keeps)
  ("the blood goes dark and dull faster than expected", "a stain that won't scrub out"),
@@ -2534,6 +2539,12 @@ RESP = {  # response: (circumstance it puts them in, or None when outwardly unch
  "Spectator": (None, "watches, says nothing, misses nothing", {"guarded"}),
  "Satisfied": (None, "watches to the end; doesn't move to help", {"cold"}),
  "Performed": (None, "the right gestures, a beat late", {"plain"}),
+ # the one who did it
+ "Cold": (None, "calm afterwards; wipes the blade or checks the gun; already thinking of the next thing", {"cold"}),
+ "Shaking": ("stunned", "hands start shaking only after; can't quite let go of what they used", {"plain"}),
+ "Justified": (None, "sure they were right; says so, or doesn't need to", {"formal"}),
+ "Regret": ("stunned", "looks at what they did; reaches toward it, or away", {"guarded"}),
+ "Set": (None, "jaw set; says nothing; doesn't look away", {"guarded"}),
 }
 RESPONSES = {k: v[1] for k, v in RESP.items()}
 SHAKEN_TO = {k: v[0] for k, v in RESP.items() if v[0] and v[0] != "hurt"}
@@ -2549,6 +2560,25 @@ BY_PROC = {
  "conceptual": {"Expressive": "Fury", "Contained": "Shock", "Numb": "Freeze", "Action": "Fury",
                 "Devotional": "Ritual", "Intellectual": "Shock", "Bargaining": "Denial", "Caretaking": "Shock"},
 }
+
+
+def attacker_response(n, vcls):
+    """How the one who did it comes across afterwards, from their nature and who they hurt."""
+    a = n["axes"]
+    styles = {v["style"]: v["frac"] for v in n["voices"]}
+    if processing(n) == "Performed" or styles.get("Predator", 0) >= 0.25 or (a[W] <= -2 and a[V] <= -1):
+        return "Cold"
+    if vcls in CLOSE and a[W] >= 0:
+        return "Regret"
+    if a[V] >= 2:
+        return "Shaking"
+    if n["creed"] in ("Justice", "Order", "Faith", "Strength") or styles.get("Zealot", 0) >= 0.25:
+        return "Justified"
+    if a[W] >= 2:
+        return "Regret"
+    if styles.get("Professional", 0) + styles.get("Commanding", 0) + styles.get("Schemer", 0) >= 0.5:
+        return "Cold"
+    return "Set"
 
 
 def violence_response(n, hurt, vcls="stranger", acls="stranger", symbol=None):
@@ -2605,7 +2635,7 @@ def violence_response(n, hurt, vcls="stranger", acls="stranger", symbol=None):
 def violence_steady(n, resp, dials, vcls="stranger"):
     """True when violence doesn't change how they come across: it is already who they are.
     Never true when someone close to them is involved, except for the hollow."""
-    if resp == "Performed":
+    if resp in ("Performed", "Cold", "Justified", "Set"):
         return True
     if vcls in CLOSE:
         return False
@@ -2672,13 +2702,17 @@ def cmd_violence(a):
     for path, n in zip(a.files, ns):
         vc = relation_to(n, a.victim, members)
         ac = relation_to(n, a.attacker, members)
-        r = violence_response(n, n["name"].lower() in hurt, vc[0], ac[0], a.symbol)
+        did_it = bool(a.attacker) and a.attacker.lower() == n["name"].lower()
+        if did_it and n["name"].lower() not in hurt:
+            r = attacker_response(n, vc[0])
+        else:
+            r = violence_response(n, n["name"].lower() in hurt, vc[0], ac[0], a.symbol)
         st = violence_steady(n, r, dials, vc[0])
         rel = []
         if a.victim and vc[0] != "stranger": rel.append("%s is their %s" % (a.victim, vc[1]))
         if a.attacker and ac[0] != "stranger": rel.append("%s is their %s" % (a.attacker, ac[1]))
         if a.symbol and a.symbol == n["creed"]: rel.append("it strikes at what they hold highest")
-        if a.record and n["name"].lower() not in hurt:
+        if a.record and n["name"].lower() not in hurt and not did_it:
             n["memory"].append({"day": n["day"], "event": "witnessed", "with": a.attacker or "",
                                 "note": "%s hurt" % (a.victim or "someone")})
             fx = apply_affect(n, "witnessed", vc[0], EVENTS["witnessed"][2])
