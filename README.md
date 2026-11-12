@@ -1,5 +1,10 @@
 # RP-Instructional
 
+> **Narrating a game? Use [The Chamber of Output](https://github.com/KeychainofSolomon/The-Chamber-of-Output).**
+> This repository is the engine: its rules, tables and workings. The chamber carries a sealed,
+> pinned copy of it and gives the narrating AI only plain briefs, so the workings never reach the
+> story. Install the chamber for play; come here to change how the world works.
+
 Skills for roleplay agents. Install one, and the agent running your scenes follows it.
 
 ## npc-temperament
