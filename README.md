@@ -11,6 +11,7 @@ An engine for running NPCs in any setting, built on causes.
 - **Masks.** Some characters are masked, borrowed, shifting, hollow or unanchored, and it shows only in behaviour.
 - **Same structure at every scale.** Groups (households, crews, guilds, corps) are built exactly like people, and the times shift around them all.
 - **Memory.** Characters remember everything they lived through and change slowly.
+- **Circumstance.** Hurt, fear, grief, drink, rank, ritual and more amend how each character comes across, unless their nature holds. An audit command checks every combination before anything new is added.
 - **No leaked information.** The narrator never tells the player what their character feels, and NPCs only know what they could know.
 - **Quests stay rare.** NPCs ask for help only when an Open drive passes five gates, and most asks are partial.
 

@@ -236,6 +236,8 @@ EVENTS = {  # trust sign, default size, marks [(axis, +-1)], need effects {rung:
  "triumph": (0, 0, [(M, 1), (D, 1)], {"Selfhood": 1}),
  "loss": (0, 0, [(E, -1), (V, 1)], {"Belonging": -2}),
  "code-broken": (0, 0, [(C, -1)], {"Selfhood": -2}),
+ "fell-ill": (0, 0, [], {"Survival": -1}),
+ "intoxicated": (0, 0, [], {"Comfort": 1}),
 }
 STRATAGEMS = [(3, "Overwhelm: confront openly, or toy with them"), (1, "Press: demand terms, show strength"),
               (0, "Wait and probe: test them, seek allies, feint"),
@@ -650,6 +652,11 @@ def cmd_day(a):
         sys.exit("%s is dead; no day." % n["name"])
     dials = load(a.world)["dials"] if a.world else n["dials"]
     n["day"] += 1
+    af = n.setdefault("afflictions", {})
+    for k in list(af):
+        af[k] -= 1
+        if af[k] <= 0:
+            del af[k]
     wts, st = n["needs"]["weight"], n["needs"]["state"]
     live = [r for r in RUNGS if wts[r] > 0]
     rung = wpick(live, [wts[r] for r in live])
@@ -667,6 +674,8 @@ def cmd_day(a):
         cause = fill(random.choice(fresh), n, rung)
         n["recent_causes"] = (n["recent_causes"] + [c for c in pool if fill(c, n, rung) == cause][:1])[-7:]
         st[rung] = clamp(st[rung] + (1 if val > 0 else -1) * abs(val), -2, 1)
+    if cause.startswith("fell sick"):
+        af["sick"] = d(3) + 1
     echo = 0
     if a.circle:
         ct = load(a.circle).get("today") or {}
@@ -688,6 +697,8 @@ def cmd_day(a):
     notes = []
     for cp in n["compulsions"]:
         if d(6) == 6:
+            cp["pressure"] += 1
+        if af.get("grieving") and cp["urge"] in ("a substance", "gambling", "cruelty", "lust"):
             cp["pressure"] += 1
         if cp["pressure"] >= cp["threshold"]:
             notes.append("compulsion '%s' at threshold: acts on it at the next real opportunity" % cp["urge"])
@@ -731,6 +742,8 @@ def cmd_day(a):
     print("Open to speaking of their drive today: %s%s" % (
         "yes" if open_today else "no", " (the day touched it)" if opened else " (d10=%d vs %d)" % (
             oroll, n["derived"]["openness_target"])))
+    if af:
+        print("Lasting states: " + ", ".join("%s (%d more day%s)" % (k, v, "" if v == 1 else "s") for k, v in af.items()))
     if trailing:
         print("Speech today: trailing off now and then (%s). A few ellipses across the scene, not every line."
               % trailing)
@@ -778,6 +791,320 @@ def tetrad_key(band):
     return "Kind" if band == "Kind" else "Hostile" if band == "Hostile" else "Middle"
 
 
+# ---------- circumstance: how situations amend the way a person comes across ----------
+TAGS_ALL = {"plain", "intimate", "warm", "giving", "leisure", "dominant", "action", "formal", "levity",
+            "cold", "display", "guarded", "sad", "petty", "fear", "covert", "rage", "wounded"}
+FORM_TAGS = {
+ # kindness
+ "Candid": {"plain"}, "Confiding": {"intimate", "warm"}, "Forgiving": {"warm"}, "Generous": {"giving", "warm"},
+ "Gruff-Kind": {"warm", "plain"}, "Hospitable": {"giving", "leisure", "warm"}, "Loyal": {"warm", "plain"},
+ "Mentoring": {"leisure", "dominant"}, "Practical": {"plain"}, "Protective": {"action", "warm"},
+ "Respectful": {"plain", "formal"}, "Reverent": {"formal", "warm"}, "Teasing-Fond": {"levity", "intimate", "warm"},
+ "Tender": {"warm", "intimate"},
+ # middle
+ "Appraising": {"cold", "dominant"}, "Bargaining-Humour": {"levity", "leisure"},
+ "Boastful": {"display", "levity", "dominant"}, "Curious": {"leisure"}, "Distracted": {"plain"},
+ "Dutiful": {"plain", "formal"}, "Evasive": {"guarded"}, "Flirtatious": {"levity", "display", "intimate"},
+ "Gossipy": {"levity", "leisure"}, "Indifferent": {"cold"}, "Melancholic": {"sad"}, "Mercurial": {"display"},
+ "Performing": {"display", "levity"}, "Preaching": {"display", "formal"}, "Ritual": {"formal"},
+ "Testing": {"dominant", "cold"}, "Transactional": {"cold", "plain"}, "Wary": {"guarded"},
+ "Withdrawn": {"guarded", "sad"},
+ # hostility
+ "Cold Refusal": {"cold"}, "Contempt": {"cold", "dominant"}, "Envy/Spite": {"petty"},
+ "Fear-Aggression": {"fear", "action"}, "Grudge": {"cold"}, "Manipulation": {"display", "covert"},
+ "Mockery": {"levity", "display", "dominant"}, "Obstruction": {"formal", "cold"}, "Predatory": {"dominant", "cold"},
+ "Reproach": {"sad"}, "Righteous Wrath": {"action", "dominant"}, "Sabotage": {"covert"},
+ "Suspicion": {"guarded"}, "Territorial": {"action", "dominant"}, "Toying": {"levity", "dominant"},
+ "Violent Outburst": {"action", "rage"},
+ # wounded responses
+ "Wounded-Selfless": {"wounded"}, "Wounded-Panic": {"wounded"}, "Wounded-Stoic": {"wounded"},
+ "Wounded-Shock": {"wounded"},
+}
+
+
+def _voice_frac(n, style):
+    return sum(v["frac"] for v in n["voices"] if v["style"] == style)
+
+
+def _ax(n, i):
+    return n["axes"][i]
+
+
+R = lambda **k: k
+CIRC = {
+ "hurt": R(itag={"wounded"}, block=TAGS_ALL - {"wounded"},
+           repl={b: (lambda n: violence_response(n, True)) for b in ("Kind", "Middle", "Hostile")},
+           inflect="badly hurt; what they feel toward you shows only under the pain",
+           speech=("broken by breath", "flow"), slip=99,
+           approach={"humour": -2, "flattery": -2, "haggling": -2, "pressure": -1, "pity": 0}),
+ "frozen": R(itag={"guarded"}, block={"levity", "display", "leisure", "action", "dominant", "giving", "intimate"},
+             repl={"Kind": "Withdrawn", "Middle": "Withdrawn", "Hostile": "Grudge"},
+             inflect="does not move; holds whatever they were holding", speech=("silent, or a few words", "volume"),
+             slip=2, voices=("Sensitive", "Vigilant"),
+             approach={"pressure": -1, "patience": 1, "familiarity": -1}),
+ "afraid": R(itag={"fear"}, block={"levity", "display", "leisure", "dominant"},
+             repl={"Kind": "Protective", "Middle": "Wary", "Hostile": "Fear-Aggression"},
+             exempt=lambda n: _ax(n, V) <= -2,
+             soften=(lambda n: _ax(n, M) >= 3, {"dominant", "display", "levity"}, "blusters over the fear"),
+             inflect="eyes on the exits; small, fast movements", speech=("clipped", "flow"), slip=2,
+             voices=("Vigilant", "Sensitive", "Devoted"),
+             approach={"pressure": -1, "patience": 1, "humour": -1, "principle": -1}),
+ "enraged": R(block={"warm", "intimate", "leisure", "giving", "sad"}, allow={"Protective"},
+              repl={"Kind": "Protective", "Middle": "Dutiful", "Hostile": "Righteous Wrath"},
+              inflect=lambda n: ("held very still; every word measured" if _ax(n, D) >= 2
+                                 else "loud, close, leaning in"),
+              itag=lambda n: {"guarded"} if _ax(n, D) >= 2 else {"action", "display"},
+              speech=("short and hard", "flow"), slip=lambda n: 1 if _ax(n, D) >= 2 else 3,
+              voices=("Commanding", "Mercurial", "Zealot", "Predator"),
+              approach={"humour": -2, "flattery": -1, "pity": -1, "patience": 1, "deference": 1}),
+ "stunned": R(itag={"plain"}, block={"levity", "display", "leisure", "dominant", "action"},
+              repl={"Kind": "Practical", "Middle": "Distracted", "Hostile": "Cold Refusal"},
+              inflect="a beat behind; keeps doing the ordinary thing a moment too long",
+              speech=("flat; repeats things", "flow"), slip=2, approach={"patience": 1, "humour": -1}),
+ "tending": R(itag={"warm"}, block={"levity", "display", "leisure", "dominant", "giving", "intimate", "formal", "covert",
+                     "petty", "fear", "rage"},
+              repl={"Kind": "Protective", "Middle": "Distracted", "Hostile": "Cold Refusal"},
+              inflect="hands busy with the wounded; barely looks up", speech=("low, mostly to the wounded", "volume"),
+              approach={"humour": -2, "haggling": -2, "flattery": -1}),
+ "grieving": R(itag={"sad"}, block={"levity", "display", "leisure"},
+               repl={"Kind": lambda n: "Tender" if _ax(n, W) >= 1 else "Practical", "Middle": "Melancholic",
+                     "Hostile": lambda n: "Reproach" if _ax(n, W) >= 0 else "Grudge"},
+               swap={"Fear-Aggression": lambda n: "Reproach" if _ax(n, W) >= 0 else "Grudge"},
+               soften=(lambda n: "laughs at the wrong moments" in n["quirks"] or (_ax(n, E) >= 2 and _ax(n, O) >= 2),
+                       {"levity"}, "gallows humour, a little too bright"),
+               inflect="a stillness at the edges; their mind goes elsewhere mid-sentence", speech=("trailing", "flow"),
+               slip=2, voices=("Serious", "Mercurial", "Self-Sacrificing", "Devoted"),
+               approach={"humour": -2, "haggling": -2, "flattery": -1, "pressure": -1, "patience": 1}),
+ "sick": R(itag={"plain"}, block={"display", "levity", "action"},
+           repl={"Kind": "Practical", "Middle": "Distracted", "Hostile": "Cold Refusal"},
+           inflect="pale, slow, short of breath", speech=("short", "flow"), slip=1,
+           approach={"patience": 1, "pressure": -1, "generosity": 1}),
+ "exhausted": R(itag={"plain"}, block={"display", "action", "leisure"},
+                repl={"Kind": "Practical", "Middle": "Distracted", "Hostile": "Cold Refusal"},
+                inflect="heavy-lidded; leans on things", speech=("trailing", "flow"), slip=1,
+                approach={"patience": 1, "humour": -1, "pressure": -1}),
+ "intoxicated": R(itag={"plain"}, swap={"Dutiful": "Distracted", "Wary": lambda n: "Flirtatious" if _ax(n, E) >= 0 else "Melancholic",
+                        "Cold Refusal": "Mockery", "Ritual": "Melancholic", "Evasive": "Confiding",
+                        "Obstruction": "Mockery", "Indifferent": "Gossipy", "Withdrawn": "Melancholic",
+                        "Appraising": "Boastful"},
+                  exempt=lambda n: _ax(n, D) >= 3, exempt_note="very careful about every word",
+                  inflect="loose: too loud or too slow; says more than they mean", speech=("rambling", "flow"), slip=3,
+                  voices=("Mercurial", "Adventurous", "Dramatic", "Leisurely"),
+                  approach={"humour": 1, "familiarity": 1, "principle": -1, "patience": -1}),
+ "starving": R(itag={"plain"}, block={"giving"}, soften=(lambda n: _ax(n, W) >= 3, {"giving"}, "gives what they can't spare"),
+               repl={"Kind": "Practical", "Middle": "Transactional", "Hostile": "Grudge"},
+               inflect="eyes go to any food", approach={"generosity": 1, "humour": -1}),
+ "solemn": R(itag={"formal"}, block={"levity", "display", "leisure", "action"}, allow={"Preaching"},
+             exempt=lambda n: n["authenticity"]["kind"] == "Hollow" or _voice_frac(n, "Predator") >= 0.25,
+             exempt_note="unmoved by the solemnity around them",
+             repl={"Kind": "Reverent", "Middle": "Ritual", "Hostile": "Cold Refusal"},
+             inflect="low voices, set forms", speech=("hushed", "volume"), slip=-1,
+             approach={"humour": -2, "familiarity": -1, "deference": 1, "principle": 1}),
+ "festive": R(itag={"levity", "display"}, swap={"Wary": lambda n: "Curious" if _ax(n, E) >= 1 else None,
+                    "Dutiful": lambda n: "Gossipy" if _ax(n, E) >= 1 else None},
+              inflect="raised voice over the noise", speech=("loud", "volume"), slip=1,
+              voices=("Dramatic", "Adventurous"), approach={"humour": 1, "familiarity": 1, "patience": -1}),
+ "superior": R(itag={"formal"}, block={"display", "levity", "rage"},
+               swap={"Mockery": "Contempt", "Toying": "Cold Refusal", "Territorial": "Obstruction",
+                     "Boastful": "Dutiful"},
+               exempt=lambda n: _ax(n, M) >= 3, exempt_note="talks over whoever outranks them",
+               repl={"Kind": "Respectful", "Middle": "Dutiful", "Hostile": "Obstruction"},
+               inflect="checks the superior's face before answering", speech=("formal", "register"), slip=-1,
+               approach={"deference": 1, "familiarity": -1, "humour": -1}),
+ "intimate": R(itag={"intimate"}, swap={"Wary": "Confiding", "Withdrawn": "Melancholic", "Dutiful": "Candid",
+                     "Evasive": "Confiding", "Performing": "Mercurial"},
+               inflect="a lower voice; fewer defences", speech=("soft", "volume"), slip=2,
+               approach={"familiarity": 1, "pity": 1}),
+ "public": R(itag={"guarded"}, swap={"Confiding": "Loyal",
+                   "Tender": lambda n: None if (_ax(n, E) >= 2 or _ax(n, W) >= 3) else "Practical",
+                   "Reproach": lambda n: None if _voice_frac(n, "Dramatic") >= 0.25 else "Cold Refusal"},
+             inflect="aware of being watched", slip=-1, approach={"familiarity": -1}),
+ "duty": R(itag={"formal"}, swap={"Flirtatious": lambda n: None if _ax(n, D) <= -1 else "Dutiful",
+                 "Gossipy": lambda n: "Dutiful" if _ax(n, D) >= 1 else None,
+                 "Distracted": "Wary", "Hospitable": "Practical",
+                 "Bargaining-Humour": lambda n: "Transactional" if _ax(n, D) >= 1 else None},
+           inflect="one eye on the post", speech=("procedural", "register"), approach={"principle": 1, "haggling": -1}),
+}
+CONDS = ["hurt", "frozen", "afraid", "enraged", "stunned", "tending", "grieving", "sick", "exhausted",
+         "intoxicated", "starving", "solemn", "festive", "superior", "intimate", "public", "duty"]
+SHAKEN_TO = {"Fury": "enraged", "Freeze": "frozen", "Flight": "afraid", "Shock": "stunned",
+             "Tending": "tending", "Ritual": "solemn"}
+STRESS = {"hurt", "frozen", "afraid", "enraged", "stunned", "tending", "grieving", "solemn", "superior"}
+QUIRK_KIND = {
+ "counts money twice": "compulsive", "never sits with back to a door": "stress",
+ "speaks of self in third person when nervous": "stress", "hums the same four notes": "idle",
+ "refuses to say a certain word": "compulsive", "collects small useless objects of one kind": "idle",
+ "always offers something to drink": "social", "calls everyone by the wrong name, kindly": "social",
+ "can't stand whistling": "compulsive", "touches a lucky object before deciding": "stress",
+ "laughs at the wrong moments": "stress", "keeps a dead person's belonging close": "grief",
+ "answers in sayings": "social", "sleeps at odd hours": "constant", "never finishes a drink": "social",
+ "counts steps": "compulsive", "lies about trivial things only": "social",
+ "pockets one small thing from every visitor, returns it later": "compulsive",
+ "feeds animals obsessively": "idle", "always knows the time without looking": "constant",
+}
+SIDE_TEXT = {
+ "Limit/Boundless": (("keeps within bounds", {"plain"}), ("goes a step too far", {"action"})),
+ "Odd/Even": (("an odd turn of phrase", {"levity"}), ("by the book", {"formal"})),
+ "One/Many": (("keeps a little apart", {"guarded"}), ("draws others in", {"display"})),
+ "Right/Left": (("says it straight", {"plain"}), ("a sly edge", {"covert"})),
+ "Pressing/Yielding": (("pushes", {"dominant", "action"}), ("gives ground", {"guarded"})),
+ "Rest/Motion": (("very still", {"plain"}), ("can't keep still", {"action"})),
+ "Straight/Curved": (("blunt", {"plain"}), ("says it sideways", {"guarded"})),
+ "Light/Dark": (("a lightness under it", {"levity"}), ("a brooding undertone", {"sad"})),
+ "Good/Petty": (("fair-minded", {"plain"}), ("a petty jab slips in", {"petty"})),
+ "Square/Oblong": (("even-handed", {"plain"}), ("angling for advantage", {"covert"})),
+}
+
+
+def _val(x, n):
+    return x(n) if callable(x) else x
+
+
+def circ_active(n, conds):
+    """Conditions in priority order, minus those this person is exempt from by nature."""
+    out, notes = [], []
+    for c in CONDS:
+        if c in conds:
+            r = CIRC[c]
+            if r.get("exempt") and r["exempt"](n):
+                if r.get("exempt_note"):
+                    notes.append(r["exempt_note"])
+                continue
+            out.append(c)
+    return out, notes
+
+
+BAND_FALLBACK = {
+ "Kind": ["Practical", "Respectful", "Loyal", "Candid", "Protective", "Tender", "Forgiving"],
+ "Middle": ["Withdrawn", "Distracted", "Dutiful", "Wary", "Indifferent", "Melancholic", "Ritual"],
+ "Hostile": ["Cold Refusal", "Grudge", "Suspicion", "Obstruction", "Reproach", "Contempt"],
+}
+
+
+def _passes(form, c, n):
+    r = CIRC[c]
+    bad = FORM_TAGS[form] & r.get("block", set())
+    if not bad or form in r.get("allow", set()):
+        return True
+    sf = r.get("soften")
+    return bool(sf and sf[0](n) and bad <= sf[1])
+
+
+def resolve(form, band_key, active, n):
+    """Amend a form until it fits the active circumstances.
+    Higher-priority circumstances win: a lower one may only amend into a form every higher one accepts;
+    if nothing fits them all, the lowest-priority circumstance yields and stays as colour only.
+    Returns (form, softening notes, ok, yielded circumstances)."""
+    conds = list(active)
+    yielded = []
+    seen = {form}
+    for _ in range(40):
+        fits = lambda f: all(_passes(f, c, n) for c in conds)
+        if fits(form):
+            moved = False
+            for c in conds:
+                sw = CIRC[c].get("swap", {})
+                if form in sw:
+                    t = _val(sw[form], n)
+                    if t and t != form and t not in seen and fits(t):
+                        form = t; seen.add(t); moved = True
+                        break
+            if not moved:
+                notes = []
+                for c in conds:
+                    r = CIRC[c]
+                    bad = FORM_TAGS[form] & r.get("block", set())
+                    if bad and form not in r.get("allow", set()) and r.get("soften") and r["soften"][2] not in notes:
+                        notes.append(r["soften"][2])
+                return form, notes, True, yielded
+            continue
+        cand = []
+        for c in conds:
+            sw = CIRC[c].get("swap", {})
+            if form in sw and _val(sw[form], n):
+                cand.append(_val(sw[form], n))
+        for c in conds:
+            if not _passes(form, c, n) and "repl" in CIRC[c]:
+                cand.append(_val(CIRC[c]["repl"][band_key], n))
+        for c in conds:
+            if "repl" in CIRC[c]:
+                cand.append(_val(CIRC[c]["repl"][band_key], n))
+        cand += BAND_FALLBACK[band_key]
+        pick = next((t for t in cand if t in FORM_TAGS and fits(t)), None)
+        if pick:
+            form = pick; seen.add(pick)
+        else:
+            yielded.append(conds.pop())
+    return form, [], False, yielded
+
+
+def conditions_for(n, a, band, about_you, plan):
+    td = n.get("today") or {}
+    af = n.get("afflictions", {})
+    c = set()
+    if a.hurt: c.add("hurt")
+    if td.get("shaken") in SHAKEN_TO: c.add(SHAKEN_TO[td["shaken"]])
+    for k in ("grieving", "sick", "intoxicated", "exhausted"):
+        if af.get(k): c.add(k)
+    if td.get("trailing") == "tired": c.add("exhausted")
+    if n["needs"]["state"]["Survival"] == -2 and "sick" not in c: c.add("starving")
+    if any(n["scars"].get(x, {}).get("dir") == -1 for x in (a.danger or [])): c.add("afraid")
+    if plan and plan.startswith("Yield"): c.add("afraid")
+    if band == "Hostile" and n["axes"][V] >= 2 and about_you <= -3: c.add("enraged")
+    for flag, cond in (("solemn", "solemn"), ("festive", "festive"), ("superior", "superior"),
+                       ("duty", "duty"), ("drunk", "intoxicated"), ("tired", "exhausted"),
+                       ("sick", "sick"), ("grieving", "grieving"), ("audience", "public")):
+        if getattr(a, flag, False): c.add(cond)
+    if a.private and total_trust(n, a.who) >= n["derived"]["guard"] + 2: c.add("intimate")
+    return c
+
+
+def _blocked_by(tags, conds, n):
+    return [c for c in conds if tags & CIRC[c].get("block", set())]
+
+
+def colour_for(n, active, side):
+    """Colour notes (circumstance inflections, contradiction side) and speech, each dropped when a
+    stronger active circumstance blocks what it carries. Returns (notes, speech, dropped)."""
+    notes, dropped = [], []
+    for i, c in enumerate(active):
+        t = _val(CIRC[c].get("inflect"), n)
+        if not t:
+            continue
+        tg = _val(CIRC[c].get("itag", {"plain"}), n)
+        if _blocked_by(tg, active[:i], n):
+            dropped.append(t)
+        elif t not in notes:
+            notes.append(t)
+    pair = SIDE_TEXT.get(n["contradiction"]["pair"]) if "contradiction" in n else None
+    if pair:
+        txt, tg = pair[0 if side == "A" else 1]
+        if _blocked_by(tg, active, n):
+            dropped.append(txt)
+        else:
+            notes.append(txt)
+    speech, cats = [], set()
+    for c in active:
+        sp = CIRC[c].get("speech")
+        if sp and sp[1] not in cats:
+            speech.append(sp[0]); cats.add(sp[1])
+    return notes, speech, dropped
+
+
+def intensity(mood, band, n):
+    dv = n["derived"]
+    if band == "Hostile":
+        k = dv["fuse"] - mood
+        return "utterly " if k >= 5 else "openly " if k >= 2 else ""
+    if band == "Cool":
+        return "barely " if mood == -2 else "fully " if mood <= -5 else ""
+    if band == "Warm":
+        return "barely " if mood == 2 else "fully " if mood >= dv["glow"] - 1 else ""
+    if band == "Kind":
+        return "deeply " if mood - dv["glow"] >= 3 else ""
+    return ""
+
+
 def cmd_meet(a):
     n = load(a.file)
     if n["condition"] in ("dead", "comatose"):
@@ -814,6 +1141,20 @@ def cmd_meet(a):
             dang += n["scars"][cat]["dir"]
             lean = n["scars"][cat]["form"]
     dang = clamp(dang, -1, 1)
+    # violence response decided first: it is a circumstance for everything below
+    if a.violence:
+        resp = violence_response(n, a.hurt)
+        steady = violence_steady(n, resp, n["dials"])
+        if n.get("today"):
+            n["today"]["shaken"] = None if steady else resp
+            save(n, a.file)
+        td = n.get("today") or td
+    # approach is amended by circumstance (pre-band pass uses the conditions known before mood)
+    pre, _ = circ_active(n, conditions_for(n, a, None, 0, None))
+    for c in pre:
+        if a.approach:
+            ap += CIRC[c].get("approach", {}).get(a.approach, 0)
+    ap = clamp(ap, -2, 2)
     about_you = trust + ap + creed + social + cont + dang
     about_them = td["mood"] + chronic(n)
     mood = dv["baseline"] + about_them + about_you
@@ -823,53 +1164,7 @@ def cmd_meet(a):
     if mood >= dv["glow"] and not (about_you >= 1 or n["axes"][W] >= 2):
         mood, capped = dv["glow"] - 1, " (capped: nothing about you earns kindness yet)"
     band = band_of(mood, n)
-    voice = next(v for v in n["voices"] if v["style"] == td["voice"])
-    au = n["authenticity"]
-    shown = voice["manner"]
-    if a.hurt:
-        pass  # pain, terror, mortal danger to themself: no one can hold a face
-    elif au["kind"] in ("Masked", "Hollow", "Borrowed") and au["faces"]:
-        shown = au["faces"][0]["manner"]
-    elif au["kind"] == "Shifting" and au["faces"]:
-        shown = au["faces"][(d(2) - 1) if not a.audience else 0]["manner"]
-    use_alt = abs(about_them) > abs(about_you)
-    form = shown[tetrad_key(band)][1 if use_alt else 0]
-    if a.hurt and form in LEVITY:
-        other = shown[tetrad_key(band)][0 if use_alt else 1]
-        form = other if other not in LEVITY else "Withdrawn"
-    core_form = voice["manner"][tetrad_key(band)][1 if use_alt else 0]
-    print("[narrator only] %s toward %s" % (n["name"], a.who))
-    print("Mood %+d = baseline %+d, their day %+d (%s), chronic %+d, trust %+d, approach %+d, creed %+d, "
-          "social %+d, contagion %+d, danger %+d%s" % (mood, dv["baseline"], td["mood"], td["cause"], chronic(n),
-                                                      trust, ap, creed, social, cont, dang, capped))
-    tint = {"Cool": ", colder tint", "Warm": ", warmer tint"}.get(band, "")
-    print("Band: %s -> shows as %s%s (cause leans on %s)" % (band, form, tint,
-                                                            "their own day" if use_alt else "you"))
-    if a.hurt:
-        print("Hurt or in mortal fear: any face drops, levity is gone. What shows is who they are.")
-    shaken = td.get("shaken")
-    if a.violence:
-        resp = violence_response(n, a.hurt)
-        steady = violence_steady(n, resp, n["dials"])
-        shaken = None if steady else resp
-        if n.get("today"):
-            n["today"]["shaken"] = shaken
-            save(n, a.file)
-        if steady:
-            print("Violence: %s. Outwardly unchanged; this is already who they are." % resp)
-    if shaken:
-        keep = (au["kind"] == "Masked" and n["axes"][D] >= 2 and n["axes"][V] <= 0 and not a.hurt)
-        print("Shaken (%s) for the rest of today: %s. This replaces their usual manner%s."
-              % (shaken, RESPONSES[shaken], "; the mask holds over it, barely" if keep
-                 else "; any face drops"))
-    if shown is not voice["manner"]:
-        print("Core underneath: %s (%s). Surfaces only on a slip, and never before there is something to hide."
-              % (core_form, au["kind"]))
-    if set(a.danger or []) & {"violence", "injury"}:
-        print("Violence in the scene: run `violence` for register, dissonance and responses.")
-    if lean:
-        fits = lean in SBY[td["voice"]][{"Kind": "kind", "Middle": "mid", "Hostile": "host"}[tetrad_key(band)]]
-        print("Danger history stirs: %s %s" % (lean, "replaces the form this scene" if fits else "as a passing beat only"))
+    plan = None
     if band == "Hostile" or a.opposed:
         own = RANK.get(n["station"], 0) + max([t["reach"] for t in n["ties"]] + [0]) // 2 + a.ground
         diff = own - a.their_strength
@@ -879,10 +1174,199 @@ def cmd_meet(a):
         plan = next(p for lim, p in STRATAGEMS if diff >= lim)
         if n["axes"][C] <= -2 and diff < 3:
             plan += "; prefers deception at any strength"
-        print("Stratagem (strength %d vs their estimate %d): %s" % (own, a.their_strength, plan))
-    print("Contradiction side today: %s of %s" % (td["side"], n["contradiction"]["pair"]))
-    if td.get("trailing"):
-        print("Speech: trails off now and then (%s)." % td["trailing"])
+    active, exempt_notes = circ_active(n, conditions_for(n, a, band, about_you, plan))
+    # which voice leads: the circumstance can call a voice forward
+    vstyle = td["voice"]
+    for c in active:
+        aff = [v["style"] for v in n["voices"] if v["style"] in CIRC[c].get("voices", ()) and v["frac"] >= 0.25]
+        if aff:
+            vstyle = aff[0]
+            break
+    voice = next(v for v in n["voices"] if v["style"] == vstyle)
+    au = n["authenticity"]
+    slipmod = sum(_val(CIRC[c].get("slip", 0), n) for c in active)
+    face_on = au["kind"] in ("Masked", "Hollow", "Borrowed", "Shifting") and au["faces"] and slipmod < 99
+    if face_on and au["kind"] == "Masked" and td.get("shaken") and not (n["axes"][D] >= 2 and n["axes"][V] <= 0):
+        face_on = False
+    shown = voice["manner"]
+    if face_on:
+        shown = au["faces"][0]["manner"] if (au["kind"] != "Shifting" or a.audience) else au["faces"][-1]["manner"]
+    key = tetrad_key(band)
+    use_alt = abs(about_them) > abs(about_you)
+    raw = shown[key][1 if use_alt else 0]
+    form, soft, ok, yielded = resolve(raw, key, active, n)
+    infl, sp, dropped_col = colour_for(n, active, td["side"])
+    side_note = infl.pop() if (infl and SIDE_TEXT.get(n["contradiction"]["pair"]) and
+                               infl[-1] in [x[0] for x in SIDE_TEXT[n["contradiction"]["pair"]]]) else None
+    infl += soft + exempt_notes
+    others = sorted([v for v in n["voices"] if v["style"] != vstyle], key=lambda v: -v["frac"])
+    if others and others[0]["frac"] >= 0.25:
+        tf = resolve(others[0]["manner"][key][0], key, active, n)[0]
+        if tf != form:
+            infl.append("with a trace of " + tf)
+    if side_note:
+        infl.append(side_note)
+    tint = {"Cool": "colder ", "Warm": "warmer "}.get(band, "")
+    print("[narrator only] %s toward %s" % (n["name"], a.who))
+    print("Mood %+d = baseline %+d, their day %+d (%s), chronic %+d, trust %+d, approach %+d, creed %+d, "
+          "social %+d, contagion %+d, danger %+d%s" % (mood, dv["baseline"], td["mood"], td["cause"], chronic(n),
+                                                      trust, ap, creed, social, cont, dang, capped))
+    if active:
+        print("Circumstances: " + ", ".join(active))
+    print("Band: %s%s -> shows as %s%s%s" % (intensity(mood, band, n), band, tint if form == raw else "",
+                                            form, "" if form == raw else " (amended from %s)" % raw))
+    if infl:
+        print("Colour: " + "; ".join(infl))
+    if yielded:
+        print("Yields to stronger circumstances (colour only): " + ", ".join(yielded))
+    if not ok:
+        print("WARNING: circumstances could not settle on a form; run `audit`.")
+    if vstyle != td["voice"]:
+        print("The circumstance calls their %s side forward." % vstyle)
+    if face_on:
+        core = resolve(voice["manner"][key][1 if use_alt else 0], key, active, n)[0]
+        print("Core underneath: %s (%s; slip threshold now %d). Only at or after a deception."
+              % (core, au["kind"], clamp(dv["slip"] + slipmod, 0, 10)))
+    elif au["kind"] != "Genuine":
+        print("Their face has dropped: what shows is who they are.")
+    if a.violence and td.get("shaken") is None:
+        print("Violence: outwardly unchanged; this is already who they are.")
+    if set(a.danger or []) & {"violence", "injury"}:
+        print("Violence in the scene: run `violence` for register, dissonance and responses.")
+    if lean:
+        fits = lean in SBY[voice["style"]][{"Kind": "kind", "Middle": "mid", "Hostile": "host"}[key]]
+        print("Danger history stirs: %s %s" % (lean, "replaces the form this scene" if fits else "as a passing beat only"))
+    if plan:
+        print("Stratagem (their estimate of you %d): %s" % (a.their_strength, plan))
+    stress = bool(set(active) & STRESS)
+    qs = []
+    for q in n["quirks"]:
+        k = QUIRK_KIND.get(q, "constant")
+        if k == "grief":
+            qs.append(q + (" (surfaces)" if "grieving" in active else ""))
+        elif stress and k in ("idle", "social"):
+            qs.append(q + " (not now)")
+        elif stress and k == "stress":
+            qs.append(q + " (surfaces)")
+        elif (set(active) & {"festive", "intoxicated"}) and k == "social":
+            qs.append(q + " (more than usual)")
+        else:
+            qs.append(q)
+    print("Quirks: " + "; ".join(qs))
+    if td.get("trailing") and not any(x in ("trailing", "clipped", "short", "short and hard", "rambling",
+                                            "broken by breath", "flat; repeats things") for x in sp):
+        sp.append("trails off now and then")
+    if sp:
+        print("Speech: " + ", ".join(sp))
+
+
+def cmd_audit(a):
+    """Preemptive amendment review: every form x every combination of up to three circumstances x
+    every band x a spread of personalities must settle on a form that fits. Run after adding any
+    form, circumstance, quirk or style."""
+    problems = []
+    forms = set(FORM_TAGS)
+    for s in STYLES:
+        for f in s["kind"] + s["mid"] + s["host"]:
+            if f not in FORM_TAGS: problems.append("form without tags: %s (%s)" % (f, s["name"]))
+    for f in FACES:
+        if f not in SBY: problems.append("face is not a style: " + f)
+    for q in QUIRKS:
+        if q not in QUIRK_KIND: problems.append("quirk without a kind: " + q)
+    for r in RESPONSES:
+        if r.startswith("Wounded") and r not in FORM_TAGS: problems.append("wounded response without tags: " + r)
+        if not r.startswith("Wounded") and r not in SHAKEN_TO and r not in STEADY and r != "Spectator":
+            problems.append("violence response with no circumstance: " + r)
+    for pair in OPPOSITES:
+        if pair not in SIDE_TEXT: problems.append("contradiction without side text: " + pair)
+    for c in CONDS:
+        r = CIRC[c]
+        for t in r.get("block", set()):
+            if t not in TAGS_ALL: problems.append("%s blocks unknown tag %s" % (c, t))
+        if r.get("block") and set(r.get("repl", {})) != {"Kind", "Middle", "Hostile"}:
+            problems.append("%s blocks tags but lacks a replacement for every band" % c)
+        for t in r.get("swap", {}):
+            if t not in forms: problems.append("%s swaps unknown form %s" % (c, t))
+    profiles = []
+    for axes in ([0] * 7, [3] * 7, [-3] * 7, [-3, 3, 3, -3, -3, 3, 3], [3, -3, -3, 3, 3, -3, -3],
+                 [0, 2, 0, 2, 2, 2, -1], [-2, -2, 2, -1, 3, 1, 3]):
+        for extra in ({}, {"quirks": ["laughs at the wrong moments"]}, {"hollow": True}, {"predator": True},
+                      {"dramatic": True}):
+            n = {"axes": axes, "quirks": extra.get("quirks", []),
+                 "voices": [{"style": "Predator" if extra.get("predator") else
+                             "Dramatic" if extra.get("dramatic") else "Serious", "frac": 1}],
+                 "authenticity": {"kind": "Hollow" if extra.get("hollow") else "Genuine", "faces": []}}
+            profiles.append(n)
+    import itertools
+    combos = [()]
+    for k in (1, 2, 3):
+        combos += list(itertools.combinations(CONDS, k))
+    checked = 0
+    yields = {}
+    for n in profiles:
+        for combo in combos:
+            active, _ = circ_active(n, set(combo))
+            for f in forms:
+                for key in ("Kind", "Middle", "Hostile"):
+                    try:
+                        out, soft, ok, yl = resolve(f, key, active, n)
+                    except Exception as e:
+                        problems.append("crash: %s %s %s: %s" % (f, key, combo, e)); continue
+                    checked += 1
+                    if not ok:
+                        problems.append("no settled form: %s/%s under %s" % (f, key, ",".join(combo)))
+                        continue
+                    if out not in FORM_TAGS:
+                        problems.append("unknown result %s from %s under %s" % (out, f, ",".join(combo)))
+                        continue
+                    if yl:
+                        yields[len(combo)] = yields.get(len(combo), 0) + 1
+                        if len(active) == 1:
+                            problems.append("a circumstance cannot satisfy itself: %s on %s" % (active[0], f))
+                    for c in active:
+                        if c in yl:
+                            continue
+                        if not _passes(out, c, n):
+                            problems.append("%s still clashes with %s (from %s, %s)" % (out, c, f, ",".join(combo)))
+    for c in CONDS:
+        r = CIRC[c]
+        if r.get("inflect") and "itag" not in r:
+            problems.append("circumstance colour without tags: " + c)
+        if r.get("speech") and (not isinstance(r["speech"], tuple) or r["speech"][1] not in ("volume", "flow", "register")):
+            problems.append("speech without a category: " + c)
+    for n in profiles:
+        n["contradiction"] = {"pair": "Light/Dark"}
+        for pair in SIDE_TEXT:
+            n["contradiction"]["pair"] = pair
+            for combo in combos:
+                active, _ = circ_active(n, set(combo))
+                for side in ("A", "B"):
+                    notes, speech, _ = colour_for(n, active, side)
+                    for i, c in enumerate(active):
+                        t = _val(CIRC[c].get("inflect"), n)
+                        if t in notes and _blocked_by(_val(CIRC[c].get("itag", {"plain"}), n), active[:i], n):
+                            problems.append("colour '%s' kept under stronger %s" % (t, ",".join(active[:i])))
+                    txt, tg = SIDE_TEXT[pair][0 if side == "A" else 1]
+                    if txt in notes and _blocked_by(tg, active, n):
+                        problems.append("contradiction colour '%s' kept under %s" % (txt, ",".join(combo)))
+    uniq = list(dict.fromkeys(problems))
+    groups = {}
+    for u in uniq:
+        k = u.split(" (from ")[0]
+        groups[k] = groups.get(k, 0) + 1
+    print("Audit: %d form/circumstance/band/personality combinations checked across %d circumstances, "
+          "%d personality profiles." % (checked, len(CONDS), len(profiles)))
+    print("Circumstances yielding to stronger ones (by number combined): " +
+          (", ".join("%d at once: %d" % kv for kv in sorted(yields.items())) or "none"))
+    cover = {c: sum(1 for f in forms for k in ("Kind", "Middle", "Hostile")
+                    if resolve(f, k, [c], profiles[0])[0] != f) for c in CONDS}
+    print("Amendments per circumstance (ordinary person): " + ", ".join("%s %d" % kv for kv in cover.items()))
+    if uniq:
+        print("PROBLEMS (%d, in %d patterns):" % (len(uniq), len(groups)))
+        for k, v in sorted(groups.items(), key=lambda kv: -kv[1])[:60]:
+            print("  %s  x%d" % (k, v))
+        sys.exit(1)
+    print("No unhandled combinations.")
 
 
 def cmd_ask(a):
@@ -896,6 +1380,11 @@ def cmd_ask(a):
         print("NO ASK. Already asked this scene."); return
     if not a.touched:
         print("NO ASK. The talk has not touched %s." % dr["rung"]); return
+    af = n.get("afflictions", {})
+    if af.get("grieving") and dr["rung"] != "Belonging":
+        print("NO ASK. They are grieving; nothing else is spoken of now."); return
+    if af.get("sick") and dr["rung"] != "Survival":
+        print("NO ASK. Too sick to raise it."); return
     td = n.get("today")
     if not td:
         print("Roll their day first (the day decides whether they are open)."); return
@@ -947,6 +1436,16 @@ def cmd_event(a):
                 notes.append("slow change: %s shifts %+d (now %+d)" % (AX[axis], s, n["axes"][axis]))
     if a.kind == "code-broken":
         notes.append("shame: Selfhood starved; they will not forget doing it")
+    af = n.setdefault("afflictions", {})
+    if a.kind == "loss":
+        af["grieving"] = 7 + d(7)
+        notes.append("grieving for %d days" % af["grieving"])
+    if a.kind == "fell-ill":
+        af["sick"] = d(3) + 1
+        notes.append("sick for %d days" % af["sick"])
+    if a.kind == "intoxicated":
+        af["intoxicated"] = 1
+        notes.append("drunk or high for the rest of today")
     n["memory"].append({"day": n["day"], "event": a.kind, "with": a.who, "note": a.note or ""})
     derive(n)
     save(n, a.file)
@@ -1197,6 +1696,8 @@ def main():
     x.add_argument("--contagion", type=int, choices=[-1, 1]); x.add_argument("--danger", nargs="*", choices=DANGER)
     x.add_argument("--audience", action="store_true"); x.add_argument("--opposed", action="store_true")
     x.add_argument("--hurt", action="store_true"); x.add_argument("--violence", action="store_true")
+    for fl in ("solemn", "festive", "superior", "duty", "drunk", "tired", "sick", "grieving", "private"):
+        x.add_argument("--" + fl, action="store_true")
     x.add_argument("--their-strength", type=int, default=2); x.add_argument("--ground", type=int, default=0)
     x.set_defaults(f=cmd_meet)
     x = sp.add_parser("ask"); x.add_argument("file"); x.add_argument("--who", default="player")
@@ -1216,6 +1717,7 @@ def main():
     x = sp.add_parser("violence"); x.add_argument("files", nargs="*"); x.add_argument("--world")
     x.add_argument("--dials"); x.add_argument("--hurt", nargs="*"); x.set_defaults(f=cmd_violence)
     x = sp.add_parser("tide"); x.add_argument("world"); x.add_argument("--dials"); x.set_defaults(f=cmd_tide)
+    x = sp.add_parser("audit"); x.set_defaults(f=cmd_audit)
     x = sp.add_parser("styles"); x.set_defaults(f=cmd_styles)
     x = sp.add_parser("roll"); x.add_argument("expr"); x.set_defaults(f=cmd_roll)
     a = p.parse_args()

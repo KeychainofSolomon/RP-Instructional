@@ -6,7 +6,8 @@
 3. Events that mark people
 4. Slow change
 5. Conditions
-6. Tides
+6. Lasting states
+7. Tides
 
 ## 1. Memory
 
@@ -79,7 +80,14 @@ A changed character remembers who they were. They can comment on it, regret it, 
 A condition needs an established cause in the story. Never apply one to get out of
 continuity.
 
-## 6. Tides
+## 6. Lasting states
+
+Some states outlast the moment and are tracked on the ledger: grief (8–14 days after a loss),
+sickness (2–4 days after falling ill), intoxication (the rest of the day), and being shaken by
+violence (the rest of that day). They tick down with each day roll and amend how the person
+comes across while they last (circumstance.md).
+
+## 7. Tides
 
 The world moves too. Once per in-world week, one dial chosen at random may drift: d6, 1 → −1,
 6 → +1, otherwise it holds (script: `tide`). The narrator may also move dials when the story

@@ -24,6 +24,8 @@ References (read when needed):
 - `references/needs.md` — the two ladders, day events, drives.
 - `references/interaction.md` — approaches, creeds, rooms, circles, conflict, help.
 - `references/time.md` — memory, trust, slow change, tides.
+- `references/circumstance.md` — how hurt, fear, grief, drink, rank, ritual and more amend the
+  way a person comes across; the amendment review required before adding anything.
 - `references/violence.md` — registers, language, dissonance and responses for violent scenes.
 - `references/tables.md` — stations, offices, ties, codes, quirks, oddities, danger words.
 - `scripts/forge.py` — does all of this. Use it whenever code can run.
@@ -164,6 +166,16 @@ fixed forms per band, set at creation (personality.md). When the cause is mostly
 primary form shows; when it's mostly their own day, the alternate. A Masked character shows the
 Face's form; their Core form surfaces only on a slip.
 
+**Circumstance.** The form is then amended to fit the moment (circumstance.md): hurt, frozen,
+afraid, enraged, stunned, tending the wounded, grieving, sick, exhausted, drunk, starving, at a
+rite, at a party, under a superior's eye, in private with someone trusted, in public, on duty.
+Higher-priority circumstances win; some natures are exempt (the stoic aren't frightened, the iron-
+disciplined don't loosen with drink, the very dominant talk over their superiors). Circumstance
+also filters colour, speech, quirks and approach scores, can call a different voice forward, and
+thins or thickens masks. The result reads as one coherent person in one situation: "utterly
+Hostile, shows as Grudge (amended from Fear-Aggression); does not move; held very still;
+silent, or a few words".
+
 **Approach.** How the player is treating them right now, one of eleven (interaction.md), each
 scored from their traits. Flattery delights the vain and repels the sincere; pity moves the
 warm and makes the predatory lean in.
@@ -215,6 +227,8 @@ These keep the system honest without fencing it in:
   and makes gifts land harder. Inverted people starve for their cause instead.
 - **Charity.** The proud refuse gifts but accept trades; the entitled take help as owed; the
   volatile and proud accept help and resent it.
+- **Every addition is audited.** Before a new form, circumstance, quirk, style or
+  contradiction is used, run `forge.py audit` and fix what it reports (circumstance.md §6).
 - **Pain breaks faces.** Someone badly hurt, in agony or in mortal fear shows their Core, not
   their Face, and drops all levity (no flirting, boasting, joking or performing).
 - **Hollow.** Pity and principle don't move them. Trust moves only through usefulness.
@@ -262,6 +276,8 @@ python scripts/forge.py npc --name "Maren" --dials 1,1,1,0,1,1,1 --save maren.js
 python scripts/forge.py circle --name "Shipwrights" --members maren.json bram.json --save guild.json
 python scripts/forge.py day maren.json --circle guild.json --world world.json
 python scripts/forge.py meet maren.json --approach patience --creed aligned --danger violence
+python scripts/forge.py meet maren.json --hurt --audience --superior --grieving --drunk --private
+python scripts/forge.py audit
 python scripts/forge.py meet maren.json --opposed --their-strength 3 --ground 1
 python scripts/forge.py ask maren.json --touched
 python scripts/forge.py event maren.json betrayal --note "sold her out to the watch"
