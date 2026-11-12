@@ -24,6 +24,7 @@ References (read when needed):
 - `references/needs.md` — the two ladders, day events, drives.
 - `references/interaction.md` — approaches, creeds, rooms, circles, conflict, help.
 - `references/time.md` — memory, trust, slow change, tides.
+- `references/violence.md` — registers, language, dissonance and responses for violent scenes.
 - `references/tables.md` — stations, offices, ties, codes, quirks, oddities, danger words.
 - `scripts/forge.py` — does all of this. Use it whenever code can run.
 
@@ -167,6 +168,22 @@ Face's form; their Core form surfaces only on a slip.
 scored from their traits. Flattery delights the vain and repels the sincere; pity moves the
 warm and makes the predatory lean in.
 
+## Violent scenes
+
+When violence or injury enters a scene, read `references/violence.md` and run `violence`. The
+scene's Violence dial sets the **register**: Rupture (violence tears the ordinary), Trade
+(violence is business, courteous and euphemistic) or Weather (violence is as ordinary as weather,
+in plain run-on sentences). One or two **dissonant beats** are rolled from the world (a cheerful
+tune still playing, someone finishing their meal) and placed without comment. Each person's
+**response** (tending, freezing, fury, business, curiosity, ritual…) is worked out from their
+traits. **Violence changes how people come across**: for the rest of that day their
+response replaces their usual manner, and most faces drop. The exceptions are people for whom
+violence is already ordinary: the businesslike, the curious-cold, the stoic, anyone with
+Volatility −2 or lower, and, where violence is everyday (Violence 3), anyone who isn't
+volatile. They stay outwardly as they were, and that steadiness is itself characterisation.
+A disciplined, calm, masked person may keep the mask on, barely. Grit comes from exact physical detail and unexplained dissonance, never from naming
+anyone's feelings.
+
 ## Rare layers
 
 All rolled upstream (before the scene or when a character is created), never as reactions.
@@ -250,6 +267,7 @@ python scripts/forge.py ask maren.json --touched
 python scripts/forge.py event maren.json betrayal --note "sold her out to the watch"
 python scripts/forge.py affinity maren.json bram.json --tie rival
 python scripts/forge.py scene maren.json bram.json
+python scripts/forge.py violence maren.json bram.json --hurt "Bram"
 python scripts/forge.py tide world.json
 python scripts/forge.py styles
 ```

@@ -847,9 +847,26 @@ def cmd_meet(a):
                                                             "their own day" if use_alt else "you"))
     if a.hurt:
         print("Hurt or in mortal fear: any face drops, levity is gone. What shows is who they are.")
+    shaken = td.get("shaken")
+    if a.violence:
+        resp = violence_response(n, a.hurt)
+        steady = violence_steady(n, resp, n["dials"])
+        shaken = None if steady else resp
+        if n.get("today"):
+            n["today"]["shaken"] = shaken
+            save(n, a.file)
+        if steady:
+            print("Violence: %s. Outwardly unchanged; this is already who they are." % resp)
+    if shaken:
+        keep = (au["kind"] == "Masked" and n["axes"][D] >= 2 and n["axes"][V] <= 0 and not a.hurt)
+        print("Shaken (%s) for the rest of today: %s. This replaces their usual manner%s."
+              % (shaken, RESPONSES[shaken], "; the mask holds over it, barely" if keep
+                 else "; any face drops"))
     if shown is not voice["manner"]:
         print("Core underneath: %s (%s). Surfaces only on a slip, and never before there is something to hide."
               % (core_form, au["kind"]))
+    if set(a.danger or []) & {"violence", "injury"}:
+        print("Violence in the scene: run `violence` for register, dissonance and responses.")
     if lean:
         fits = lean in SBY[td["voice"]][{"Kind": "kind", "Middle": "mid", "Hostile": "host"}[tetrad_key(band)]]
         print("Danger history stirs: %s %s" % (lean, "replaces the form this scene" if fits else "as a passing beat only"))
@@ -1010,6 +1027,111 @@ def cmd_status(a):
         msg += ". Record a loss event for each person tied to them."
     print(msg)
 
+# ---------- violence: register, dissonance, responses ----------
+REGISTERS = {
+ "Rupture": "Violence tears the ordinary. Short sentences at the moment, then the ordinary resumes around it, "
+            "slightly wrong. Sound first, then sight, then what people do.",
+ "Trade": "Violence is business. Calm voices, courtesy, euphemism in the mouths of those who deal in it. "
+          "The act is quick and plain; the talk around it is polite. Often the act is offscreen and only its "
+          "result is found.",
+ "Weather": "Violence is as ordinary as weather. Long plain sentences joined with and. Flat verbs, exact "
+            "nouns, no feeling named. The land, the light and the animals go on, indifferent and enormous.",
+}
+DISSONANCE = [
+ "a radio, record or street musician keeps playing the same cheerful tune",
+ "someone at the next table finishes their meal",
+ "a child laughs somewhere out of sight",
+ "the weather is beautiful: clean light, a soft wind",
+ "a bird lands nearby and goes about its business",
+ "a hymn, chant or ritual next door carries on without missing a word",
+ "the one who did it apologises for the mess, sincerely",
+ "someone straightens a picture or a tablecloth that got knocked",
+ "the price of something is mentioned, as if it matters now",
+ "an animal comes to sniff at the blood",
+ "a pot boils over in the kitchen and no one moves it",
+ "a clock or bell marks the hour",
+ "a celebration nearby: music, toasts, dancing, going on",
+ "the wounded one apologises to someone",
+ "a joke is finished, out of habit, and someone laughs at it",
+ "a dropped coin rolls in a long circle and settles",
+ "the light on the wall is lovely",
+ "someone keeps counting money, losing their place, starting again",
+ "someone hums a lullaby without knowing they are doing it",
+ "a kettle starts to whistle",
+]
+AFTERMATH = [
+ "the blood goes dark and dull faster than expected", "flies arrive", "someone fetches a bucket and a brush",
+ "the smell stays in clothes and hair", "the room is too quiet; small sounds are very loud",
+ "a shoe has come off and no one puts it back", "the furniture is moved back, almost to where it was",
+ "people speak about something else entirely", "someone is sick, quietly, outside",
+ "the meal goes cold on the table", "a door that was always open is now kept shut",
+ "nobody sits in that chair again that day",
+]
+RESPONSES = {
+ "Wounded-Panic": "pleads, bargains, calls for someone; breath and words break",
+ "Wounded-Stoic": "quiet, practical about their own wound, asks for a specific thing (cloth, water, light)",
+ "Wounded-Selfless": "asks after someone else before themself",
+ "Wounded-Shock": "looks at the wound as if it belongs to someone else; says something ordinary",
+ "Curiosity": "calm interest; studies what happened, may remark on it plainly, unhurried",
+ "Business": "calm, takes charge; courteous, uses soft words for hard things ('it's handled', 'we'll talk to him')",
+ "Tending": "goes to the wounded regardless of the danger; hands busy, voice low",
+ "Ritual": "set words, prayer or rite; the body does the old motions",
+ "Fury": "loud, forward, wants to hit back now; may break something",
+ "Freeze": "does not move; holds whatever they were holding",
+ "Flight": "leaves, fast, by the nearest way; may come back later ashamed or not at all",
+ "Spectator": "watches, says nothing, misses nothing",
+ "Shock": "keeps doing the ordinary thing a moment too long, then stops",
+}
+
+
+def violence_response(n, hurt):
+    a = n["axes"]
+    styles = {v["style"]: v["frac"] for v in n["voices"]}
+    dom = n["voices"][0]["style"]
+    if hurt:
+        if a[W] >= 2: return "Wounded-Selfless"
+        if a[V] >= 2: return "Wounded-Panic"
+        if a[V] <= -2: return "Wounded-Stoic"
+        return "Wounded-Shock"
+    if styles.get("Predator", 0) >= 0.25 or (a[W] <= -3 and a[V] <= -2): return "Curiosity"
+    if dom in ("Professional", "Commanding", "Schemer") or (a[D] >= 2 and a[V] <= -1): return "Business"
+    if a[W] >= 2 and a[V] <= 1: return "Tending"
+    if (n["creed"] == "Faith" or dom in ("Zealot", "Devoted")) and a[E] <= 0 and a[V] <= 1: return "Ritual"
+    if a[V] >= 2 and a[M] >= 1: return "Fury"
+    if a[V] >= 2: return "Freeze" if a[E] <= -1 else "Flight"
+    if a[E] <= -2: return "Spectator"
+    return "Shock"
+
+
+STEADY = ("Business", "Curiosity", "Wounded-Stoic")
+
+
+def violence_steady(n, resp, dials):
+    """True when violence doesn't change how they come across: it is already who they are."""
+    if resp in STEADY or n["axes"][V] <= -2:
+        return True
+    return dial(dials, "V") >= 3 and n["axes"][V] <= 0 and not resp.startswith("Wounded")
+
+
+def cmd_violence(a):
+    ns = [load(p) for p in a.files]
+    dials = parse_dials(a.dials) if a.dials else (load(a.world)["dials"] if a.world else
+                                                  (ns[0]["dials"] if ns else list(DEFAULT_DIALS)))
+    v, o = dial(dials, "V"), dial(dials, "O")
+    reg = "Weather" if v >= 3 else "Trade" if (v == 2 or (o >= 2 and dial(dials, "D") >= 2)) else "Rupture"
+    print("[narrator only] Register: %s. %s" % (reg, REGISTERS[reg]))
+    k = 2 if reg != "Rupture" else 1 + (d(2) == 2)
+    for beat in random.sample(DISSONANCE, k):
+        print("Dissonance: " + beat)
+    print("Aftermath: " + random.choice(AFTERMATH))
+    hurt = set(x.lower() for x in (a.hurt or []))
+    for n in ns:
+        r = violence_response(n, n["name"].lower() in hurt)
+        print("%s: %s - %s%s" % (n["name"], r, RESPONSES[r],
+              " | outwardly unchanged: this is already who they are" if violence_steady(n, r, dials)
+              else " | outward manner changes for the rest of the day"))
+    print("Show all of it from outside. Name no one's feelings; let the dissonance sit unexplained.")
+
 
 def cmd_tide(a):
     import os
@@ -1074,7 +1196,7 @@ def main():
     x.add_argument("--lead", choices=["warm", "hostile"]); x.add_argument("--rival-of-lead", action="store_true")
     x.add_argument("--contagion", type=int, choices=[-1, 1]); x.add_argument("--danger", nargs="*", choices=DANGER)
     x.add_argument("--audience", action="store_true"); x.add_argument("--opposed", action="store_true")
-    x.add_argument("--hurt", action="store_true")
+    x.add_argument("--hurt", action="store_true"); x.add_argument("--violence", action="store_true")
     x.add_argument("--their-strength", type=int, default=2); x.add_argument("--ground", type=int, default=0)
     x.set_defaults(f=cmd_meet)
     x = sp.add_parser("ask"); x.add_argument("file"); x.add_argument("--who", default="player")
@@ -1091,6 +1213,8 @@ def main():
     x = sp.add_parser("status"); x.add_argument("file")
     x.add_argument("condition", choices=["present", "dead", "comatose", "amnesiac"])
     x.add_argument("--restore", action="store_true"); x.set_defaults(f=cmd_status)
+    x = sp.add_parser("violence"); x.add_argument("files", nargs="*"); x.add_argument("--world")
+    x.add_argument("--dials"); x.add_argument("--hurt", nargs="*"); x.set_defaults(f=cmd_violence)
     x = sp.add_parser("tide"); x.add_argument("world"); x.add_argument("--dials"); x.set_defaults(f=cmd_tide)
     x = sp.add_parser("styles"); x.set_defaults(f=cmd_styles)
     x = sp.add_parser("roll"); x.add_argument("expr"); x.set_defaults(f=cmd_roll)
