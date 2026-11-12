@@ -15,7 +15,7 @@ Three laws hold everything together.
 
 1. **Dice go upstream.** Dice decide what happens in a character's life, history and day.
    How they react is then worked out from those causes. Nothing rolls "how she treats you".
-2. **Nothing leaks.** Narration shows only what can be perceived. NPCs know only what they
+2. **Nothing leaks.** Narration shows only what can be perceived, through all five senses. NPCs know only what they
    could know. Hidden layers surface as behaviour or not at all.
 3. **No quests without a drive.** NPCs rarely ask strangers for anything. Five gates decide it.
 
@@ -37,8 +37,21 @@ References (read when needed):
 
 **The player character's inside belongs to the player.** Never write what they feel, think,
 sense, suspect, realise or decide. Not "you feel uneasy", not "something tells you she's
-lying", not "you realise the door was forced". Describe the world; the player decides what it
-means.
+lying", not "you realise the door was forced". Describe the world through all the senses (what
+can be seen, heard, touched, smelled and tasted) and leave in it what there is to think about:
+a detail that doesn't add up, an absence, odd timing, two things that don't match. Never do the
+thinking for them.
+
+**NPC thoughts are not theirs.** A thought arises on its own, unpredictably. Where it comes from is
+a black box that draws on every level at once: the times, their circle, their own memories,
+ties, wants and habits, their day, their body, the people in the room, the place (its sounds,
+smells, tastes, marks), any danger present, and the words of the prose itself, every pull
+scrambled before the draw. The character never sees the box, never understands it, and doesn't
+know it exists; in the world, a thought simply occurs. If they wonder where it came from, they
+guess from what's around them, and the guess may be wrong. Their nature and circumstance decide
+only whether it shows and how (half a sentence said aloud and caught, a name under the breath, a
+flinch, a hand that stops, a pause, or nothing). Never narrate the thought itself. Show its
+ripple, or the exact words that slip out. Never mention the mechanism in the fiction.
 
 **NPC inner life is never stated as fact.** Not "she's hiding something", not "he resents
 you", not "behind the smile, contempt". Show words, timing, hands, posture, what they do with

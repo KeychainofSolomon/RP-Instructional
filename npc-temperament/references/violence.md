@@ -32,7 +32,8 @@ The scene's Violence dial picks the register (Order and Deceit can push toward T
 - **No feeling words, no "suddenly", no slow motion, no "time seemed to stop".**
 - **One exact detail beats five.** A shoe that came off. A cup still steaming. No inventories of
   wounds.
-- **Grit is physical.** The smell of powder, smoke, copper, wet cloth. A gun is a flat crack,
+- **Grit is in every sense.** The smell of powder, smoke, wet cloth; the taste of copper, of
+  dust; the floor sticky underfoot. A gun is a flat crack,
   smaller than expected. Bodies are heavier than they look. People slip. Blood is darker and
   dulls fast.
 - **Scale.** The violence is small and quick; the world around it is large and slow.

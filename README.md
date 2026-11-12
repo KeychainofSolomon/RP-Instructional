@@ -16,8 +16,12 @@ It is built on three laws:
    day, what they stumble on. How they react is then worked out from those causes. Nothing ever
    rolls "how she treats you".
 2. **Nothing leaks.** The narrator never tells the player what their character feels or thinks,
-   never states an NPC's inner life as fact, and no NPC knows what they couldn't know. Hidden
-   layers show only as behaviour, details and objects.
+   never states an NPC's inner life as fact, and no NPC knows what they couldn't know. The world
+   comes through all five senses, with things left in it to think about. Hidden layers show only
+   as behaviour, details and objects. NPC thoughts arise unbidden from a black box that draws on
+   every level (the times, their circle, their memories, their day, the room, the place, the
+   prose itself). The character doesn't know the box exists. Thoughts show only as ripples: a
+   pause, a name under the breath, half a sentence caught too late.
 3. **No quests without a drive.** NPCs rarely ask strangers for anything. A request for help
    only happens when five conditions line up, and even then the outsider can usually do only
    part of it.
@@ -74,7 +78,7 @@ starving, solemn, festive, a superior watching, in private with someone trusted,
 on duty. Each one blocks what doesn't fit, turns it into what does, and exempts the natures
 it doesn't touch. A shot man doesn't flirt. A gossip goes quiet at a funeral. Mockery in front
 of the boss becomes silent contempt. The very dominant talk over their superiors anyway.
-Circumstance also shapes speech, quirks, masks, which side of a blended person comes forward,
+Circumstance also shapes speech, quirks, masks, how unbidden thoughts surface, which side of a blended person comes forward,
 and how each approach lands. Results come with intensity and colour ("utterly Hostile, shows as
 Grudge; does not move; held very still; silent, or a few words"), so the same person rarely
 reads the same way twice.
@@ -134,7 +138,7 @@ the times (scene settings, drifting)
           └ their day (rolled: what happened to them, which voice leads, openness, temptation)
               └ the encounter (computed: mood from causes → band → form)
                   └ the moment (circumstances amend form, colour, speech, quirks, masks)
-                      └ the prose (only what can be seen, heard and touched)
+                      └ the prose (all five senses, and what there is to think about)
 
 and afterwards: pain, elation, clarity, habit → pressure on traits → slow change → new self
 ```

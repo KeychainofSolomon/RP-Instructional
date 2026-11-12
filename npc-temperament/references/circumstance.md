@@ -111,7 +111,49 @@ Grief (8–14 days after a loss), sickness (2–4 days after falling ill) and in
 the day) are tracked on the ledger and tick down with each day roll. Shaken states from violence
 last the rest of that day. Exhaustion comes from the day itself.
 
-## 6. Amendment review (required when adding anything)
+## 6. Unbidden thoughts
+
+At the start of a scene (`scene`), each person has a 25% chance that a thought arises. Where it
+comes from is a **black box** that draws on every level:
+
+- **the times**: recent change, violence, scarcity, faith, strangeness;
+- **their circle's** day;
+- **their own**: memories (recent and intense ones weigh more), ties (by loyalty), what they
+  want, the pull of compulsions and habits, their codes, who they used to be, their small quirks;
+- **their day** and their feeling;
+- **their body**: hunger, tiredness, an ache;
+- **the encounter**: who is in the room;
+- **the place**: its sounds, smells, tastes, objects and marks;
+- **danger** present;
+- **the prose**: words just written into the scene (`scene --prose "..."`);
+- **nothing at all**: an old tune, a sum, a stranger's face.
+
+The box picks a level, then a thought within it, scrambling every weight at both steps. A fresh
+grief dominates without drowning out the room: a man who just lost his friend thinks of a memory
+about half the time, and otherwise of his day, his ties, the danger, the people present, his
+body, the place, the times.
+
+**The character never sees the box, never understands it, and doesn't know it exists.** In the
+world, a thought simply occurs. The script also names something perceivable they might *put it
+down to* if they wonder aloud. That's their guess, and it's often wrong. Never mention the
+mechanism in the fiction.
+
+Whether and how it shows depends on them and the moment (`meet` reports it):
+
+| Who, when | What shows |
+|---|---|
+| frozen or afraid | nothing |
+| clear | a pause; the eyes come back; it is let go |
+| drunk, exhausted or hurt, Discipline ≤ 1 | half a sentence said aloud, then caught |
+| grieving | a name, or a word, under the breath |
+| hollow, or Discipline ≥ 2 | a hand stops for a moment, or nothing at all |
+| Volatility ≥ 2 | it crosses the face: a flinch, or a smile at nothing |
+| Energy ≥ 2 | they mention it, out of nowhere |
+| anyone else | a glance at something, a pause mid-sentence |
+
+The thought is never named in narration. Only its ripple shows, or the exact words that slip.
+
+## 7. Amendment review (required when adding anything)
 
 The system is meant to grow. Every addition must be reviewed against every circumstance before it
 is used, so that a new trait never ends up flirting while shot.

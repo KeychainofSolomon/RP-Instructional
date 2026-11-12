@@ -9,7 +9,7 @@ and the marks that what happened leaves behind. Violent scenes draw their disson
 python scripts/forge.py place warming.json --name "Warming room" --dials 0,2,2,2,3,1,1 --add "sound:the prayer bell" "animal:the monastery cats" "light:the morning light through the shutters" "routine:the bread run before Lauds" "object:the old copper kettle" "smell:woodsmoke and wet wool" "person:the old porter"
 ```
 
-Kinds: **sound, light, animal, routine, object, smell, person, weather**. Aim for six to ten
+Kinds: **sound, light, animal, routine, object, smell, taste, person, weather**. Aim for six to ten
 things a regular would name without thinking. They should belong to this place and no other.
 
 ## How it's used
