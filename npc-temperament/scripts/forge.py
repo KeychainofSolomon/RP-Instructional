@@ -1556,7 +1556,11 @@ def cmd_audit(a):
             arisen += 1
             text_, guess_, g_ = _draw(nn, ctx_)
             seeds_seen.add(g_)
-            if ":" in text_ or not text_.strip():
+            old_labels = ("a memory:", "the place:", "today:", "their people:", "what they want:", "the pull of",
+                          "the habit of", "a line they don't cross:", "something small and theirs:", "the body:",
+                          "a word in the air:", "nothing to do with anything:", "someone or something of theirs:",
+                          "the danger in the room")
+            if text_.lower().startswith(old_labels) or not text_.strip():
                 problems.append("a thought carries a label or is empty: %r" % text_)
     if len(seeds_seen) < 8:
         problems.append("thoughts draw from too few levels: %s" % sorted(seeds_seen))
