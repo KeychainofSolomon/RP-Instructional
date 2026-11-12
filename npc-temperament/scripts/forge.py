@@ -144,13 +144,13 @@ COMPULSIONS = ["greed", "gambling", "lust", "cruelty", "jealousy", "lying", "cur
                "cleanliness and order", "a substance", "vengeance", "collecting",
                "can't back down"]
 
-RUNG_TIES = {"Survival": ["dependant", "place", "kin"], "Safety": ["enemy", "place", "group"],
-             "Means": ["creditor", "debtor", "master"], "Comfort": ["place", "object", "lover"],
+RUNG_TIES = {"Survival": ["dependant", "kin"], "Safety": ["enemy"],
+             "Means": ["creditor", "master"], "Comfort": ["place"],
              "Belonging": ["kin", "lover", "friend", "group", "dependant"],
              "Standing": ["group", "rival", "master"], "Selfhood": ["master", "rival", "mentor", "group"],
-             "Meaning": ["cause", "mentor", "object", "group"]}
+             "Meaning": ["cause"]}
 FALLBACK = {"Survival": "the people they feed", "Safety": "someone who wishes them harm",
-            "Means": "the one who pays them", "Comfort": "home", "Belonging": "someone close",
+            "Means": "the one they owe", "Comfort": "home", "Belonging": "someone close",
             "Standing": "their peers", "Selfhood": "whoever holds power over them",
             "Meaning": "what they believe in"}
 CAUSES = {
@@ -164,7 +164,7 @@ CAUSES = {
             "was robbed or cheated"],
            ["got paid", "made a good deal", "eased a debt with {tie}", "found a new opportunity"]),
  "Comfort": (["slept badly or was in pain", "went without a small pleasure they rely on",
-              "had their {tie} spoiled or disturbed", "was bored to the bone"],
+              "had {tie} spoiled or disturbed", "was bored to the bone"],
              ["indulged a pleasure", "finally rested", "received a small gift", "had a beautiful moment at {tie}"]),
  "Belonging": (["fought with {tie}", "had no word from {tie}", "was left out by others",
                 "marked a lonely anniversary"],
@@ -191,7 +191,7 @@ DRIVES = {
              "to stop waiting for the knock"],
             ["to be rid of {tie}", "protection for someone they love", "to get out of where they are",
              "to clear their name with the authorities"]),
- "Means": (["to stop measuring life in money", "to make peace with having failed", "to stop envying {tie}",
+ "Means": (["to stop measuring life in money", "to make peace with having failed", "to stop envying those who have more",
             "to feel they have earned enough"],
            ["to clear a debt with {tie}", "to recover stolen goods", "to land a deal or job",
             "a permit, tool or licence"]),
@@ -208,7 +208,7 @@ DRIVES = {
               ["to get free of an oath, contract or owner", "to recover a record of who they were",
                "to get out from under {tie}", "a chance to act on their own judgement"]),
  "Meaning": (["to believe again", "to know if they were right", "to matter", "something they can't name"],
-             ["a relic, text or key to {tie}", "to reach a place that matters", "to finish what {tie} began",
+             ["a relic, text or key to {tie}", "to reach a place that matters", "to finish a work begun for {tie}",
               "to witness proof"]),
 }
 ODD_PLAIN = ["gives a gift, then asks for it back next time", "insults you while fixing something of yours",
@@ -394,7 +394,10 @@ def build(dials, name=None, kind="person"):
     elif ak == "Borrowed":
         faces = [pick_styles(1, dials, core_names)[0]["name"]]
     elif ak == "Shifting":
-        faces = random.sample([f for f in FACES if f not in core_names] or FACES, 2)
+        pool = [f for f in FACES if f not in core_names]
+        if len(pool) < 2:
+            pool = [s["name"] for s in STYLES if s["name"] not in core_names] or FACES
+        faces = random.sample(pool, 2)
     n["authenticity"] = {"kind": ak, "faces": [{"style": f, "manner": voice_manner(SBY[f])} for f in faces]}
     # ties
     n["ties"] = []
@@ -470,9 +473,7 @@ def build(dials, name=None, kind="person"):
     rn, die, amax = RATIO[d(4)]
     n["contradiction"] = {"pair": OPPOSITES[d(10) - 1], "ratio": rn, "die": die, "a_max": amax}
     n["quirks"] = random.sample(QUIRKS, 2 if n["flags"]["complete"] else 1)
-    if ak == "Hollow" and n["drive"]["rung"]:
-        n["drive"]["text"] = n["drive"]["text"].replace("someone they love", "someone useful to them").replace(
-            "to be loved back", "to be treated as if loved")
+    hollow_drive(n)
     derive(n)
     # danger scars: rolled once per category, permanent history
     n["scars"] = {}
@@ -482,6 +483,24 @@ def build(dials, name=None, kind="person"):
             dirn = ds[0] if ds[0] != 2 else random.choice([1, -1])
             n["scars"][cat] = {"dir": dirn, "form": ds[1]}
     return n
+
+
+HOLLOW_RUNGS = ("Belonging", "Selfhood", "Meaning")
+
+
+def hollow_drive(n):
+    """A hollow character performs feeling without having it, so no drive may rest on love,
+    grief, selfhood or faith. Retarget to a physical rung or Standing and reword."""
+    dr = n["drive"]
+    if n["authenticity"]["kind"] != "Hollow" or not dr.get("rung"):
+        return
+    if dr["rung"] in HOLLOW_RUNGS:
+        wts, st = n["needs"]["weight"], n["needs"]["state"]
+        ok = [r for r in RUNGS if r not in HOLLOW_RUNGS]
+        r = max(ok, key=lambda x: (wts[x] * deficit(st[x]), wts[x]))
+        pool = DRIVES[r][0 if dr["type"] == "Inward" else 1]
+        dr["rung"], dr["text"] = r, fill(random.choice(pool), n, r)
+    dr["text"] = dr["text"].replace("someone they love", "someone useful to them")
 
 
 def deficit(state):
@@ -721,6 +740,10 @@ def drift_authenticity(n, step):
     if new in ("Masked", "Hollow") and not n["authenticity"]["faces"]:
         f = random.choice(FACES)
         n["authenticity"]["faces"] = [{"style": f, "manner": voice_manner(SBY[f])}]
+    if new == "Hollow":
+        w = n["needs"]["weight"]
+        w["Selfhood"], w["Meaning"], w["Belonging"] = 0, 0, min(w["Belonging"], 1)
+        hollow_drive(n)
     if new == "Genuine":
         n["authenticity"]["faces"] = []
     return "authenticity drifted: now %s" % new

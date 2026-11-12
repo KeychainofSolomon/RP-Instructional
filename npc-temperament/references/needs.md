@@ -78,14 +78,14 @@ If the dominant voice is Zealot, Self-Sacrificing or Predator, Inverted starts a
 
 | Rung | Bad (d4) | Good (d4) |
 |---|---|---|
-| Survival [dependant, place, kin] | went hungry or thirsty · fell sick · out in the cold or heat too long · supplies ran short for {tie} | ate and drank well · recovered · found supplies for {tie} · slept warm and dry |
-| Safety [enemy, place, group] | threatened by {tie} · saw violence close by · home broken into · noticed someone watching | a threat from {tie} receded · gained protection · saw a danger dealt with · the street was calm |
-| Means [creditor, debtor, master] | lost money or work · pressed for payment by {tie} · tools or gear broke · robbed or cheated | got paid · good deal · eased a debt with {tie} · a new opportunity |
-| Comfort [place, object, lover] | slept badly or in pain · went without a relied-on pleasure · {tie} spoiled or disturbed · bored to the bone | indulged a pleasure · finally rested · a small gift · a beautiful moment at {tie} |
+| Survival [dependant, kin] | went hungry or thirsty · fell sick · out in the cold or heat too long · supplies ran short for {tie} | ate and drank well · recovered · found supplies for {tie} · slept warm and dry |
+| Safety [enemy] | threatened by {tie} · saw violence close by · home broken into · noticed someone watching | a threat from {tie} receded · gained protection · saw a danger dealt with · the street was calm |
+| Means [creditor, master] | lost money or work · pressed for payment by {tie} · tools or gear broke · robbed or cheated | got paid · good deal · eased a debt with {tie} · a new opportunity |
+| Comfort [place] | slept badly or in pain · went without a relied-on pleasure · {tie} spoiled or disturbed · bored to the bone | indulged a pleasure · finally rested · a small gift · a beautiful moment at {tie} |
 | Belonging [kin, lover, friend, group, dependant] | fought with {tie} · no word from {tie} · left out · a lonely anniversary | good time with {tie} · welcomed in · made up with {tie} · word from {tie} |
 | Standing [group, rival, master] | humiliated in front of {tie} · passed over · watched {tie} get ahead · a rumour about them | praised in public · recognised by {tie} · got the better of {tie} · asked for advice |
 | Selfhood [master, rival, mentor, group] | made to act against their own code · {tie} overrode their judgement · failed their own standard · saw what they've become | a hard choice made their own way · stood up to {tie} · finished something on their own terms · felt like themself again |
-| Meaning [cause, mentor, object, group] | doubted {tie} · a hoped-for sign came to nothing · let down by {tie} · witnessed something cruel and pointless | a sign confirmed {tie} · progress in {tie} · kept a ritual or vow · glimpsed a purpose |
+| Meaning [cause] | doubted {tie} · a hoped-for sign came to nothing · let down by {tie} · witnessed something cruel and pointless | a sign confirmed {tie} · progress in {tie} · kept a ritual or vow · glimpsed a purpose |
 
 A 0 result is an ordinary day (busy, dull, weather, routine): note the detail anyway.
 
@@ -101,12 +101,16 @@ Partial: an outsider can help with a piece, never the heart.
 |---|---|---|
 | Survival | to stop fearing hunger · to beat a dependency · to accept a failing body · to stop hoarding | steady food or water · medicine for {tie} or themself · proper shelter · a cure |
 | Safety | to feel safe at home · to stop flinching · to forgive themself for running · to stop waiting for the knock | to be rid of {tie} · protection for someone they love · to get out · to clear their name with the authorities |
-| Means | to stop measuring life in money · peace with having failed · to stop envying {tie} · to feel they've earned enough | clear a debt with {tie} · recover stolen goods · land a deal or job · a permit, tool or licence |
+| Means | to stop measuring life in money · peace with having failed · to stop envying those who have more · to feel they've earned enough | clear a debt with {tie} · recover stolen goods · land a deal or job · a permit, tool or licence |
 | Comfort | to enjoy anything again · to stop needing a vice · to rest without guilt · to feel at home | a rare pleasure · fix up {tie} · a supply of their vice · a real day off |
 | Belonging | to be loved back · to grieve {tie} · forgiveness from someone gone · to stop being the outsider | find {tie} · get word to {tie} · be accepted by {tie} · bring {tie} home |
 | Standing | to deserve their position · to stop needing approval · to outgrow a disgrace · to be seen as {tie} never saw them | recognition from {tie} · restore their name · beat {tie} at something · proof of worth (a commission, title, contract) |
 | Selfhood | to know who they really are · to stop lying to themself · peace with a choice · to stop being what {tie} made them | free of an oath, contract or owner · a record of who they were · out from under {tie} · a chance to act on their own judgement |
-| Meaning | to believe again · to know if they were right · to matter · something they can't name | a relic, text or key to {tie} · reach a place that matters · finish what {tie} began · witness proof |
+| Meaning | to believe again · to know if they were right · to matter · something they can't name | a relic, text or key to {tie} · reach a place that matters · finish a work begun for {tie} · witness proof |
+
+A **Hollow** character never has a drive resting on Belonging, Selfhood or Meaning: it moves to
+their most pressured physical rung or Standing, and nothing in it speaks of love or grief.
+This applies the moment they become Hollow, whether at creation or by drifting.
 
 Drives move slowly. When the day roll shows pressure has clearly moved to another rung
 (weight × hunger ≥ 4 there), consider shifting the drive over the following days, never
