@@ -28,6 +28,7 @@ References (read when needed):
   way a person comes across; the amendment review required before adding anything.
 - `references/affect.md` — pain, elation and clarity; getting used to things; inclinations and
   habits; how traits change against the anchor of who someone is.
+- `references/speech.md` — 25 ways of talking, slang mechanisms, honest and manipulative speech.
 - `references/places.md` — place sheets: what is always there, and what violence leaves behind.
 - `references/violence.md` — registers, language, dissonance and responses for violent scenes.
 - `references/tables.md` — stations, offices, ties, codes, quirks, oddities, danger words.
@@ -202,6 +203,30 @@ silent, or a few words".
 **Approach.** How the player is treating them right now, one of eleven (interaction.md), each
 scored from their traits. Flattery delights the vain and repels the sincere; pity moves the
 warm and makes the predatory lean in.
+
+## Speech: how they talk
+
+Everyone has a baseline way of talking (`references/speech.md`): one of 25 manners, sometimes
+blended with a second (3/4 + 1/4, 3/5 + 2/5, 1/2 + 1/2). It is worked out at creation from their
+traits, voices, creed, station and the world they grew up in, and it stays theirs. Each manner has
+a register (street, plain, formal, ceremonial), a length (terse, measured, expansive), keywords and
+three habits of speech, plus how it turns warm and how it turns hostile.
+
+- **Mood bends it.** Warm and Kind bring out the manner's warm turn, Hostile its cold one, Cool
+  holds it back. The manner stays: a laconic person who likes you still uses few words.
+- **The moment pulls it, never wholly.** Solemnity, rank, duty and an audience pull the register
+  up one step; drink, festivity, intimacy and exhaustion loosen it one step. Pain, fear and rage
+  shorten it; festivity lengthens it. Never more than one step, and never the habits themselves.
+- **Slang** for street and plain speakers is described by how it's made (reversed words, rhymes
+  with the rhyme dropped, borrowed words, thieves' cant, pictures for things, made-up endings,
+  clipping, number codes, agreement tags, flourish oaths). Invent the actual words to suit the
+  setting. Some people code-switch: street words with their own, standard speech for authority.
+- **How they bend words**: Plain, Tactful, Palterer (true things arranged to mislead), Spinner
+  (framing, flattery, presupposed agreement) or Worker (obligation, guilt, false deadlines, a
+  small yes before the real ask, and turning blame round when caught). It shows in its scheming
+  form when they have a stratagem or a face to keep. **None of it is ever a tell**: honest
+  people flatter and hedge too, and practised manipulators sound frank. Tells still come only from
+  a slip, at or after a deception, and nothing ever confirms that someone is telling the truth.
 
 ## Violent scenes
 

@@ -95,6 +95,14 @@ and how each approach lands. Results come with intensity and colour ("utterly Ho
 Grudge; does not move; held very still; silent, or a few words"), so the same person rarely
 reads the same way twice.
 
+Everyone has a way of talking: one of 25 manners (street-quick, proverbial, courtly, laconic,
+velvet-oblique, corporate, scriptural, rambling, cutting, tender and more), sometimes blended with a
+second. Mood turns it warm or cold, and the moment pulls its register and length one step at most,
+never wholly. Street speakers get slang described by how it is built (reversed words, dropped
+rhymes, borrowings, cant, codes), so the narrator invents words that fit any world, and some
+code-switch for authority. Each person also has a way of bending words, from plain dealing
+through paltering and spin to working on people, and none of it is ever a tell.
+
 Punctuation is part of how someone speaks. Semicolons, exclamation points and the odd word in
 CAPITALS are all allowed, and the engine says which suit the person and the moment: a shout
 gets an exclamation and maybe a capitalised word, a bright or drunk person exclaims easily, a

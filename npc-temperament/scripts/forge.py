@@ -4,7 +4,7 @@
 Dice go upstream: every random roll decides something about a character's life, history
 or day. Reactions are then computed from those causes, never rolled directly.
 """
-import argparse, json, math, random, sys
+import argparse, collections, json, math, random, sys
 
 AX = ["Candour", "Volatility", "Energy", "Warmth", "Discipline", "Openness", "Dominance"]
 C, V, E, W, D, O, M = range(7)
@@ -498,6 +498,7 @@ def build(dials, name=None, kind="person"):
         if d(100) <= n["derived"]["nerve"]:
             dirn = ds[0] if ds[0] != 2 else random.choice([1, -1])
             n["scars"][cat] = {"dir": dirn, "form": ds[1]}
+    speech_build(n, random.Random(random.random()))
     return n
 
 
@@ -606,6 +607,11 @@ def show(n):
         print("Code: %s (control %d)" % (c["code"], c["control"]))
     for c in n["compulsions"]:
         print("Compulsion: %s (control %d, acts after %d temptations)" % (c["urge"], c["control"], c["threshold"]))
+    sp_ = speech_of(n)
+    print("Speech: %s%s (%s)%s | bends words: %s" % (
+        ("%s " % fmt_frac(sp_["frac"])) if sp_["side"] else "", sp_["main"],
+        REG_WORD[sp_["reg"]], (" + %s %s" % (fmt_frac(1 - sp_["frac"]), sp_["side"])) if sp_["side"] else "",
+        sp_["bend"] + ("; slang: " + ", ".join(sp_["slang"]) if sp_["slang"] else "") + ("; code-switches" if sp_["switches"] else "")))
     co = n["contradiction"]
     print("Contradiction: %s at %s | Quirk: %s" % (co["pair"], co["ratio"], "; ".join(n["quirks"])))
     if n["scars"]:
@@ -1146,6 +1152,270 @@ def intensity(mood, band, n):
     return ""
 
 
+
+# ---------- speech: a baseline way of talking, bent by mood and the moment, never wholly ----------
+# Each manner: register (0 street, 1 plain, 2 formal, 3 ceremonial), length (0 terse, 1 measured,
+# 2 expansive), keywords, devices (structural habits, three each), how it turns warm, how it turns
+# hostile, and what it fits: axes, styles, creeds, world settings.
+REG_WORD = ["street", "plain", "formal", "ceremonial"]
+LEN_WORD = ["terse", "measured", "expansive"]
+SPEECH = {
+    "Gutterquick": dict(reg=0, len=0, keys="street talk, quick, slangy, all nicknames",
+        dev=["coins and clips words; slang for anything that matters", "calls everyone by a nickname or a street name",
+             "drops the subject and the small words: seen it, didn't like it"],
+        warm="the nicknames turn fond; strangers get kin-words", cold="slang spat like gravel; your name bent into an insult",
+        ax={E: 1, D: -1, C: 0.5}, st=("Adventurous", "Mercurial", "Self-Made"), cr=("Thrill", "Freedom"), dl="SV", low=True),
+    "Dealmaker": dict(reg=1, len=1, keys="transactional, streetwise, easy, always pricing",
+        dev=["everything framed as a deal, a cut, a favour owed", "trade talk: terms, margins, who's good for it",
+             "a friendly opener that gets to the number"],
+        warm="throws something in for free; calls you a regular", cold="the price climbs mid-sentence; talks about you as a cost",
+        ax={M: 0.5, W: -0.5, C: -0.5}, st=("Self-Made", "Schemer", "Professional"), cr=("Gain",), dl="SD", low=True),
+    "Velvet": dict(reg=2, len=1, keys="oblique, courteous, unhurried, family-minded",
+        dev=["never names a threat; makes it an offer, a friendship, a favour", "speaks of respect, of what is owed, of family",
+             "slow and quiet; lets silences do the work"],
+        warm="the favour is real and generous, the respect sincere", cold="the courtesy thickens; the offer becomes one nobody refuses",
+        ax={D: 1, M: 1, C: -1}, st=("Commanding", "Schemer", "Benevolent"), cr=("Kin", "Security"), dl="DPV"),
+    "Hearthside": dict(reg=1, len=1, keys="homely, proverbial, rooted, warm",
+        dev=["answers with a saying or a proverb", "images of weather, bread, animals, the seasons",
+             "little names and kin-words for people"],
+        warm="folk comfort; small blessings", cold="a proverb used like a door closing",
+        ax={W: 1.5, O: -0.5, V: -0.5}, st=("Leisurely", "Benevolent", "Devoted", "Self-Sacrificing"), cr=("Kin", "Mercy", "Security"), dl="FS", low=True),
+    "Salon": dict(reg=2, len=2, keys="elegant, performed, gossiping, borrowed phrases",
+        dev=["a learned or foreign phrase dropped in for effect", "compliments with a hook in them",
+             "talks of who is who and who is seen with whom"],
+        warm="charming; sweeps you into the circle", cold="a compliment that cuts; laughs at you for the room",
+        ax={E: 1, C: -1, W: 0.5}, st=("Dramatic", "Mercurial", "Self-Assured"), cr=("Pleasure", "Excellence"), dl="PD"),
+    "Courtly": dict(reg=3, len=1, keys="titled, precise, weighed, ranked",
+        dev=["titles and the proper forms of address, always", "every word weighed; nothing that could be held against them",
+             "insult only by omission, or by too much courtesy"],
+        warm="grants you a title; speaks of your standing", cold="withholds your title; cold correctness",
+        ax={D: 2, M: 1, C: -0.5}, st=("Commanding", "Conscientious", "Serious"), cr=("Order", "Excellence"), dl="PO", rank=True),
+    "Liturgical": dict(reg=3, len=2, keys="scriptural, rolling, archaic, invoking",
+        dev=["clauses chained with and, and, and", "old forms and set phrases; blessings and curses",
+             "calls on higher powers as witnesses"],
+        warm="blessings and benedictions; calls you child", cold="pronounces judgement in the old words",
+        ax={O: 0.5, D: 0.5}, st=("Zealot", "Devoted", "Visionary"), cr=("Faith",), dl="FX"),
+    "Orator": dict(reg=2, len=2, keys="declaiming, sweeping, argued, certain",
+        dev=["builds a long case to a point; asks questions and answers them", "speaks of history, nature, the whole of mankind",
+             "addresses the room even one to one"],
+        warm="takes you into the argument as a peer", cold="lectures you on your smallness, reasonably and terribly",
+        ax={M: 2, O: 1, E: 1}, st=("Visionary", "Commanding", "Dramatic", "Predator"), cr=("Strength", "Excellence"), dl="PV"),
+    "Laconic": dict(reg=1, len=0, keys="spare, flat, few words, silences",
+        dev=["answers in a word, or not at all", "no small talk; says what's needed and stops",
+             "a silence where an answer would go"],
+        warm="a nod; one short word that is enough", cold="one word, and it's final",
+        ax={E: -2, D: 1, C: 0.5}, st=("Solitary", "Vigilant", "Serious"), cr=("Security", "Strength"), dl="VS", low=True),
+    "Aphorist": dict(reg=2, len=0, keys="compressed, barbed, paradoxical, provoking",
+        dev=["short sharp sayings that turn an idea upside down", "mockery with a thinker's edge",
+             "leaves the thought unfinished for you to finish"],
+        warm="plays with you; laughs at the world beside you", cold="a single line that flays",
+        ax={O: 2, C: 1, M: 0.5}, st=("Visionary", "Self-Assured", "Solitary"), cr=("Freedom", "Strength"), dl="X"),
+    "Double-Edged": dict(reg=2, len=1, keys="layered, testing, careful, second meanings",
+        dev=["every line can be read two ways", "answers a question with a question",
+             "watches what their words do to you"],
+        warm="lets you in on the second meaning", cold="the second meaning is a blade",
+        ax={D: 1, C: -1.5, O: 1}, st=("Schemer", "Vigilant", "Conscientious"), cr=("Order", "Gain"), dl="DPX"),
+    "Strategist": dict(reg=1, len=1, keys="positional, conditional, patient, unrevealing",
+        dev=["talks of ground, timing, who holds what", "if this, then that; never commits early",
+             "concedes the small thing to keep the large"],
+        warm="advises you as an ally", cold="sizes you up aloud as an obstacle",
+        ax={D: 2, V: -1, O: 0.5}, st=("Vigilant", "Commanding", "Professional"), cr=("Order", "Security"), dl="VP"),
+    "Ironclad": dict(reg=1, len=1, keys="absolute, principled, declarative, unbending",
+        dev=["states principles as facts: I will, I won't", "sorts people into the worthy and the leeches",
+             "refuses compromise in so many words"],
+        warm="respect, stated plainly, to an equal", cold="contempt, stated as a principle",
+        ax={M: 1, C: 2, W: -1}, st=("Self-Made", "Self-Assured", "Zealot"), cr=("Excellence", "Freedom", "Justice"), dl="O"),
+    "Muddler": dict(reg=1, len=1, keys="colloquial, mundane, worried, off on tangents",
+        dev=["frets about small things: money, machines, what's owed", "a sudden question about what's real, then back to the bills",
+             "unfinished thoughts; anyway, never mind"],
+        warm="confides small troubles; shares what they have", cold="petty and aggrieved; it's your fault too",
+        ax={D: -1, O: 1, V: 0.5}, st=("Sensitive", "Leisurely", "Mercurial"), cr=("Security", "Pleasure"), dl="SX", low=True),
+    "Static": dict(reg=1, len=1, keys="jittery, suspicious, self-interrupting, unsure",
+        dev=["breaks off mid-sentence and starts again", "repeats a word as if to check it",
+             "asks whether you saw or heard that too"],
+        warm="trusts you as the one solid thing", cold="accuses; you're part of it",
+        ax={V: 2, D: -1, O: 0.5}, st=("Vigilant", "Sensitive"), cr=("Security", "Freedom"), dl="XD"),
+    "Corporate": dict(reg=2, len=1, keys="procedural, euphemistic, polished, speaks as we",
+        dev=["passive voice; nothing is anyone's fault", "a soft word for anything ugly",
+             "speaks for an institution: we, policy, the process"],
+        warm="a warm script; remembers your name; offers what the rules allow", cold="regret expressed, decision final, smiling",
+        ax={D: 1, C: -1, W: -0.5}, st=("Professional", "Conscientious", "Schemer"), cr=("Order", "Gain"), dl="OP"),
+    "Barracks": dict(reg=0, len=0, keys="blunt, profane, gallows humour, practical",
+        dev=["swears like punctuation", "jokes about death, the food, the officers",
+             "orders, not requests"],
+        warm="rough affection; insults as love", cold="threats in plain words",
+        ax={C: 1, M: 1}, st=("Adventurous", "Professional", "Commanding"), cr=("Strength", "Kin"), dl="VO", low=True),
+    "Tender": dict(reg=1, len=1, keys="affectionate, soft, attentive, endearing",
+        dev=["endearments: love, dear, little one", "softens everything: just, maybe, if you like",
+             "asks after you before anything else"],
+        warm="every endearment they have", cold="the sweetness stays, and turns to ice",
+        ax={W: 2, V: -0.5}, st=("Benevolent", "Self-Sacrificing", "Sensitive", "Devoted"), cr=("Mercy", "Kin"), dl="F"),
+    "Cutting": dict(reg=1, len=0, keys="callous, belittling, dismissive, sneering",
+        dev=["calls you by a slight instead of a name", "dismissive one-liners", "interrupts"],
+        warm="the barbs turn to teasing", cold="cruelty in very few words",
+        ax={W: -2, M: 1, C: 0.5}, st=("Predator", "Self-Assured", "Schemer"), cr=("Strength", "Thrill"), dl="VP"),
+    "Yarn-Spinner": dict(reg=1, len=2, keys="anecdotal, digressive, chummy, rambling",
+        dev=["every point becomes a story", "that reminds me of the time...", "names people you've never met as if you had"],
+        warm="tells you the good story, the one they save", cold="a story about someone like you, who came to a bad end",
+        ax={E: 2, W: 1, D: -1}, st=("Leisurely", "Adventurous", "Dramatic"), cr=("Pleasure", "Kin"), dl="", low=True),
+    "Pedant": dict(reg=2, len=2, keys="exact, qualifying, correcting, citing",
+        dev=["qualifies everything; corrects small errors", "uses the proper term and explains it",
+             "cites the rule, the source, the precedent"],
+        warm="teaches gladly", cold="corrects you into the floor",
+        ax={O: 1, D: 2, E: -1}, st=("Conscientious", "Serious", "Solitary"), cr=("Order", "Excellence"), dl="O"),
+    "Sign-Reader": dict(reg=2, len=1, keys="dreamlike, symbolic, oblique, strange",
+        dev=["speaks of signs, omens, colours and numbers", "now and then addresses someone who isn't there",
+             "pairs images that don't belong together"],
+        warm="a blessing in a strange shape", cold="an omen, about you",
+        ax={O: 2, V: 1}, st=("Visionary", "Sensitive", "Zealot"), cr=("Faith", "Freedom"), dl="XF"),
+    "Braggart": dict(reg=1, len=2, keys="loud, superlative, self-crowning, grand",
+        dev=["superlatives, and their own name", "tall claims, every number rounded up", "exclaims"],
+        warm="makes you part of the legend", cold="brags at your expense",
+        ax={E: 2, M: 1, C: -1}, st=("Dramatic", "Self-Assured", "Adventurous"), cr=("Thrill", "Excellence"), dl="V"),
+    "Earnest": dict(reg=1, len=1, keys="simple, literal, honest, guileless",
+        dev=["short honest sentences", "plain questions; takes words at face value", "says what they think, then waits"],
+        warm="open gladness", cold="plain hurt, plainly said",
+        ax={C: 2, O: -0.5, M: -1}, st=("Devoted", "Sensitive", "Leisurely"), cr=("Mercy", "Security"), dl="", low=True),
+    "Operator": dict(reg=1, len=0, keys="brief, coded, exact, businesslike",
+        dev=["the shorthand of their trade", "facts first, no preamble", "reads back what you said to confirm it"],
+        warm="a professional courtesy; a tip, off the record", cold="terms, and nothing else",
+        ax={D: 2, E: -1, C: 1}, st=("Professional", "Vigilant", "Conscientious"), cr=("Order", "Security"), dl="OV"),
+}
+
+# How slang is made, in any language: the narrator invents the actual words to suit the setting.
+SLANG = {
+    "reversal": "flips syllables or letters of ordinary words; the flipped word drifts to a new meaning",
+    "rhyme": "says a phrase that rhymes with the word, then drops the rhyming half",
+    "borrowing": "words taken from neighbouring tongues, the old country, or newcomers",
+    "cant": "a dozen words for the watch, for money, for stealing; one for everything else",
+    "figure": "a picture for a thing: windows for eyes, a fish for a fake",
+    "suffix": "tacks a made-up ending onto ordinary words to make them theirs",
+    "clipping": "cuts words short and runs them together",
+    "codes": "numbers and initials that sound like words or stand for them",
+    "tags": "ends lines with a tag that asks for agreement",
+    "oaths": "swears by something holy or by their mother as a flourish, true or not",
+}
+
+# How they bend words: honest and manipulative speech. None of these is ever a tell on its own:
+# plain dealers flatter sincerely, and practised manipulators sound frank. Tells still come only
+# from a slip, at or after a deception.
+BEND = {
+    "Plain": dict(base="specific and concrete; says no plainly; admits what they don't know",
+        work="lays their reasons out, even the unflattering ones"),
+    "Tactful": dict(base="true, but softened; leaves the hardest part unsaid",
+        work="picks the kindest true thing to say, and stops there"),
+    "Palterer": dict(base="never quite lies; true things, arranged to mislead",
+        work="answers a different question, truthfully; lets the wrong impression stand"),
+    "Spinner": dict(base="frames everything; flattery, what everyone else is doing, what you surely already agree",
+        work="builds the question so that every answer is yes"),
+    "Worker": dict(base="works on you: obligation, guilt, a deadline that isn't real",
+        work="a small yes first, then the real ask; if caught, turns it round so that you're the one at fault"),
+}
+
+
+def _speech_score(key, n, dials):
+    s = SPEECH[key]
+    ax = n["axes"]
+    sc = 1.0 + sum(w * ax[i] for i, w in s["ax"].items()) * 0.6
+    sc += sum(3 * v["frac"] for v in n["voices"] if v["style"] in s["st"])
+    sc += 1.5 if n.get("creed") in s["cr"] else 0
+    sc += 0.5 * sum(dial(dials, k) for k in s["dl"])
+    if s.get("rank"):
+        sc += 0.5 * RANK.get(n.get("station"), 0)
+    if s.get("low") and RANK.get(n.get("station"), 0) >= 2:
+        sc -= 1
+    if n.get("authenticity", {}).get("kind") == "Hollow" and key in ("Salon", "Corporate", "Velvet"):
+        sc += 2
+    return max(0.05, sc) ** 2
+
+
+def speech_build(n, rng=None):
+    """A person's baseline way of talking, worked out from who they are and the world they grew in."""
+    rng = rng or random.Random("speech:%s:%s" % (n.get("name"), n.get("axes")))
+    dials = n.get("dials") or list(DEFAULT_DIALS)
+    keys = sorted(SPEECH)
+    wts = [_speech_score(k, n, dials) for k in keys]
+    main = rng.choices(keys, wts)[0]
+    side, frac = None, 1.0
+    if rng.random() < 0.45:
+        rest = [k for k in keys if k != main and abs(SPEECH[k]["reg"] - SPEECH[main]["reg"]) <= 2]
+        side = rng.choices(rest, [_speech_score(k, n, dials) for k in rest])[0]
+        frac = rng.choice([0.75, 0.75, 0.6, 0.5])
+    reg = SPEECH[main]["reg"] if not side else round(frac * SPEECH[main]["reg"] + (1 - frac) * SPEECH[side]["reg"])
+    slang = []
+    if reg <= 1:
+        k = 2 if reg == 0 else (1 if rng.random() < 0.5 else 0)
+        sw = {s: 1.0 for s in SLANG}
+        if dial(dials, "D") >= 2 or n["axes"][C] <= -1: sw["cant"] += 2; sw["reversal"] += 1
+        if dial(dials, "S") >= 2: sw["borrowing"] += 1; sw["figure"] += 1
+        if n["axes"][O] >= 2: sw["rhyme"] += 1; sw["codes"] += 1
+        while len(slang) < k:
+            pick = rng.choices(list(sw), list(sw.values()))[0]
+            if pick not in slang: slang.append(pick)
+    switches = bool(slang) and (n["axes"][D] >= 1 or n["axes"][O] >= 1 or rng.random() < 0.3)
+    c, dec = n["axes"][C], dial(dials, "D")
+    dom = n["voices"][0]["style"]
+    lean = c - 0.5 * dec + (-2 if dom in ("Schemer", "Predator") else 0) + (-1.5 if n.get("authenticity", {}).get("kind") in ("Masked", "Hollow") else 0)
+    lean += rng.choice([-1, 0, 0, 1])
+    bend = "Plain" if lean >= 1.5 else "Tactful" if lean >= -0.5 else "Palterer" if lean >= -1.5 else "Spinner" if lean >= -3.5 else "Worker"
+    n["speech"] = {"main": main, "side": side, "frac": frac, "reg": reg, "slang": slang, "switches": switches, "bend": bend}
+    return n["speech"]
+
+
+def speech_of(n):
+    """Ledgers made before speech existed get theirs on first use, the same every time."""
+    if not isinstance(n.get("speech"), dict) or n["speech"].get("main") not in SPEECH:
+        speech_build(n)
+    return n["speech"]
+
+
+REG_UP = {"solemn", "superior", "duty", "public", "tending"}
+REG_DOWN = {"festive", "intoxicated", "intimate", "exhausted"}
+SHORTER = {"hurt", "afraid", "exhausted", "sick", "starving", "enraged", "stunned", "frozen"}
+
+
+def speech_now(n, active, band, scheming=False, rng=None):
+    """How their way of talking comes out right now. The moment pulls register and length one step
+    at most; the manner and its habits stay. Returns a dict of plain notes."""
+    rng = rng or random
+    sp = speech_of(n)
+    act = set(active)
+    m = SPEECH[sp["main"]]
+    base_reg, base_len = sp["reg"], m["len"]
+    up, down = bool(act & REG_UP), bool(act & REG_DOWN)
+    if "enraged" in act and n["axes"][D] < 2: down = True
+    shift = (1 if up and not down else -1 if down and not up else 0)
+    if sp["switches"] and up and not down: shift = 1  # those who code-switch do it readily for authority
+    reg = clamp(base_reg + shift, max(0, base_reg - 1), min(3, base_reg + 1))
+    ln = base_len - (1 if act & SHORTER else 0) + (1 if act & {"festive", "intoxicated"} and n["axes"][E] >= 0 else 0)
+    ln = clamp(ln, max(0, base_len - 1), min(2, base_len + 1))
+    if act & {"frozen", "stunned"}: ln = 0
+    pool = list(m["dev"])
+    devs = rng.sample(pool, 2)
+    if sp["side"] and rng.random() < 1 - sp["frac"] + 0.25:
+        devs.append(rng.choice(SPEECH[sp["side"]]["dev"]))
+    keys = m["keys"] + ((", with something " + SPEECH[sp["side"]]["keys"].split(",")[0] + " in it") if sp["side"] else "")
+    tone = m["warm"] if band in ("Kind", "Warm") else m["cold"] if band == "Hostile" else \
+        "less of it than usual; held back" if band == "Cool" else None
+    here = []
+    if reg > base_reg:
+        here.append("the moment pulls them toward a more %s register; the manner underneath stays" % REG_WORD[reg])
+    elif reg < base_reg:
+        here.append("the moment loosens them toward a more %s register; the manner underneath stays" % REG_WORD[reg])
+    if ln < base_len:
+        here.append("fewer words than usual")
+    elif ln > base_len:
+        here.append("more words than usual")
+    slang = [SLANG[s] for s in sp["slang"]]
+    if slang and reg >= 2 and sp["switches"]:
+        slang = []
+        here.append("they drop the street words here, and would pick them up again with their own")
+    b = BEND[sp["bend"]]
+    bend = b["work"] if scheming else b["base"]
+    return {"manner": sp["main"], "keys": keys, "habits": devs, "tone": tone, "here": here,
+            "register": REG_WORD[reg], "length": LEN_WORD[ln], "slang": slang, "bend": bend, "bend_kind": sp["bend"]}
+
+
 SHOUT_FORMS = {"Violent Outburst", "Righteous Wrath", "Fear-Aggression", "Wounded-Panic", "Territorial"}
 BRIGHT_FORMS = {"Boastful", "Performing", "Teasing-Fond", "Mockery", "Flirtatious", "Gossipy", "Hospitable",
                 "Generous", "Mercurial", "Bargaining-Humour"}
@@ -1376,6 +1646,16 @@ def cmd_meet(a):
     punct = punctuation(n, active, form)
     if punct:
         print("Punctuation: " + "; ".join(punct))
+    talk = speech_now(n, active, band, scheming=bool(plan) or face_on)
+    print("Way of talking: %s (%s, %s)." % (talk["keys"], talk["register"], talk["length"]))
+    print("  Habits of speech: " + "; ".join(talk["habits"]) + ".")
+    if talk["tone"]:
+        print("  Toward %s now: %s." % ("you" if a.who == "player" else a.who, talk["tone"]))
+    if talk["slang"]:
+        print("  Their slang: " + "; ".join(talk["slang"]) + ". Invent the words to suit the world.")
+    for h in talk["here"]:
+        print("  Here: " + h + ".")
+    print("  How they bend words: %s. Never a tell by itself." % talk["bend"])
     L = locals()
     VIEW.clear()
     VIEW.update({
@@ -1388,7 +1668,7 @@ def cmd_meet(a):
         "face_dropped": (not face_on) and au["kind"] != "Genuine",
         "violence_steady": bool(a.violence and td.get("shaken") is None),
         "shaken": td.get("shaken"), "danger_beat": lean, "danger_replaces": bool(lean and L.get("fits")),
-        "stratagem": plan, "quirks": qs, "speech": sp, "punctuation": punct, "today": td.get("cause"),
+        "stratagem": plan, "quirks": qs, "speech": sp, "punctuation": punct, "talk": talk, "today": td.get("cause"),
     })
 
 
@@ -1572,6 +1852,46 @@ def cmd_audit(a):
                     problems.append("capitals in a moment of clarity: %s" % f)
                 if len(pn) > 2 or (any("CAPITALS" in x for x in pn) and any("semicolon" in x for x in pn)):
                     problems.append("punctuation notes pull against each other: %s under %s" % (f, ",".join(combo)))
+    # speech: enough distinct manners, every field present, the moment bends but never replaces
+    if len(SPEECH) < 20: problems.append("fewer than twenty ways of talking")
+    for k, v in SPEECH.items():
+        if not all(v.get(f) for f in ("keys", "dev", "warm", "cold")) or len(v["dev"]) < 3 or v["reg"] not in range(4) or v["len"] not in range(3):
+            problems.append("way of talking incomplete: " + k)
+    for v in BEND.values():
+        if not (v.get("base") and v.get("work")): problems.append("a way of bending words is incomplete")
+    _st = random.getstate()
+    seen_m, seen_b, seen_s = collections.Counter(), collections.Counter(), collections.Counter()
+    rs = random.Random(11)
+    for i in range(3000):
+        random.seed(5000 + i)
+        dl = [rs.randint(0, 3) for _ in range(7)]
+        q = build(dl, "probe%d" % i)
+        sp_ = q["speech"]; seen_m[sp_["main"]] += 1; seen_b[sp_["bend"]] += 1
+        for x in sp_["slang"]: seen_s[x] += 1
+        if speech_of(q) is not sp_ or speech_build(dict(q, speech=None))["main"] is None:
+            problems.append("speech not stable on re-read")
+        for combo in combos[:: max(1, len(combos) // 40)]:
+            active, _ = circ_active(q, set(combo))
+            for band in BANDS:
+                t = speech_now(q, active, band, scheming=bool(i % 2))
+                if abs(REG_WORD.index(t["register"]) - sp_["reg"]) > 1:
+                    problems.append("the moment moved register more than a step: %s under %s" % (sp_["main"], ",".join(combo)))
+                if len(t["habits"]) < 2:
+                    problems.append("the moment stripped the manner bare: %s" % sp_["main"])
+                if set(active) & {"frozen", "stunned"} and t["length"] != "terse":
+                    problems.append("many words while frozen")
+                if band == "Neutral" and t["tone"]:
+                    problems.append("tone shift without cause in a neutral meeting")
+    random.setstate(_st)
+    missing = [k for k in SPEECH if not seen_m[k]]
+    if missing: problems.append("ways of talking that never occur: " + ", ".join(missing))
+    top = seen_m.most_common(1)[0]
+    if top[1] > 0.15 * 3000: problems.append("one way of talking dominates: %s %d of 3000" % top)
+    if [k for k in BEND if not seen_b[k]]: problems.append("a way of bending words never occurs")
+    if [k for k in SLANG if not seen_s[k]]: problems.append("a kind of slang never occurs")
+    print("Speech: %d ways of talking; most common %s %d/3000, rarest %s %d/3000; bends %s; slang kinds %d." % (
+        len(SPEECH), top[0], top[1], seen_m.most_common()[-1][0], seen_m.most_common()[-1][1],
+        ", ".join("%s %d" % kv for kv in sorted(seen_b.items())), len(seen_s)))
     def clar_probe(seed):
         random.seed(seed)
         c = build(list(DEFAULT_DIALS)); c["axes"] = [0] * 7; c["core"] = [0] * 7
