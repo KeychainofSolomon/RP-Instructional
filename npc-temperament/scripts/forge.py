@@ -1146,6 +1146,36 @@ def intensity(mood, band, n):
     return ""
 
 
+SHOUT_FORMS = {"Violent Outburst", "Righteous Wrath", "Fear-Aggression", "Wounded-Panic", "Territorial"}
+BRIGHT_FORMS = {"Boastful", "Performing", "Teasing-Fond", "Mockery", "Flirtatious", "Gossipy", "Hospitable",
+                "Generous", "Mercurial", "Bargaining-Humour"}
+MEASURED_FORMS = {"Ritual", "Preaching", "Dutiful", "Obstruction", "Candid", "Mentoring", "Appraising",
+                  "Respectful", "Reverent", "Transactional", "Reproach"}
+
+
+def punctuation(n, active, form):
+    """Latitude in how their words land on the page: exclamations, the odd semicolon, a word in
+    CAPITALS when they shout. Worked out from who they are and the moment; a latitude, never a tic.
+    Returns a list of plain notes (empty when nothing beyond ordinary punctuation fits)."""
+    act = set(active)
+    if act & {"frozen", "stunned"}:
+        return []
+    ax = n["axes"]
+    notes = []
+    loud = (form in SHOUT_FORMS or ("enraged" in act and ax[D] < 2)
+            or ("afraid" in act and ax[V] >= 2) or ("hurt" in act and ax[V] >= 2 and ax[D] < 1))
+    if loud and "clear" not in act:
+        notes.append("exclamations, and now and then a word in CAPITALS when they raise their voice")
+    elif (form in BRIGHT_FORMS or act & {"festive", "intoxicated"} or (ax[E] >= 2 and ax[V] >= 1)
+          or ("afraid" in act and ax[D] < 2)):
+        notes.append("an exclamation comes easily to them, here and there")
+    measured = (form in MEASURED_FORMS or act & {"solemn", "duty", "superior"}
+                or (ax[D] >= 2 and processing(n) in ("Intellectual", "Contained")))
+    if measured and not act & {"intoxicated", "exhausted", "enraged"} and not loud:
+        notes.append("full, joined-up sentences; a semicolon would not be out of place")
+    return notes
+
+
 def cmd_meet(a):
     n = load(a.file)
     if n["condition"] in ("dead", "comatose"):
@@ -1343,6 +1373,9 @@ def cmd_meet(a):
         sp.append("trails off now and then")
     if sp:
         print("Speech: " + ", ".join(sp))
+    punct = punctuation(n, active, form)
+    if punct:
+        print("Punctuation: " + "; ".join(punct))
     L = locals()
     VIEW.clear()
     VIEW.update({
@@ -1355,7 +1388,7 @@ def cmd_meet(a):
         "face_dropped": (not face_on) and au["kind"] != "Genuine",
         "violence_steady": bool(a.violence and td.get("shaken") is None),
         "shaken": td.get("shaken"), "danger_beat": lean, "danger_replaces": bool(lean and L.get("fits")),
-        "stratagem": plan, "quirks": qs, "speech": sp, "today": td.get("cause"),
+        "stratagem": plan, "quirks": qs, "speech": sp, "punctuation": punct, "today": td.get("cause"),
     })
 
 
@@ -1527,6 +1560,18 @@ def cmd_audit(a):
         hf = habit_form(q, "Hostile", active)
         if hf and not all(_passes(hf, c, q) for c in active):
             problems.append("a habit broke through a circumstance: %s under %s" % (hf, ",".join(combo)))
+    allforms = sorted(set(KIND_FORMS + MIDDLE_FORMS + HOSTILE_FORMS) | set(FORM_TAGS))
+    for n in profiles:
+        for combo in combos:
+            active, _ = circ_active(n, set(combo))
+            for f in allforms:
+                pn = punctuation(n, active, f)
+                if set(active) & {"frozen", "stunned"} and pn:
+                    problems.append("punctuation flourish while frozen: %s under %s" % (f, ",".join(combo)))
+                if "clear" in active and any("CAPITALS" in x for x in pn):
+                    problems.append("capitals in a moment of clarity: %s" % f)
+                if len(pn) > 2 or (any("CAPITALS" in x for x in pn) and any("semicolon" in x for x in pn)):
+                    problems.append("punctuation notes pull against each other: %s under %s" % (f, ",".join(combo)))
     def clar_probe(seed):
         random.seed(seed)
         c = build(list(DEFAULT_DIALS)); c["axes"] = [0] * 7; c["core"] = [0] * 7

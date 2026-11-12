@@ -95,6 +95,12 @@ and how each approach lands. Results come with intensity and colour ("utterly Ho
 Grudge; does not move; held very still; silent, or a few words"), so the same person rarely
 reads the same way twice.
 
+Punctuation is part of how someone speaks. Semicolons, exclamation points and the odd word in
+CAPITALS are all allowed, and the engine says which suit the person and the moment: a shout
+gets an exclamation and maybe a capitalised word, a bright or drunk person exclaims easily, a
+measured or formal one speaks in full sentences with a semicolon. The frozen get none, and a
+moment of clarity takes the capitals away. It is used sparingly, never on every line.
+
 ### Violence with weight
 - **Three registers**, set by the scene: *Rupture* (violence tears the ordinary), *Trade*
   (violence is business: courteous, euphemistic, often offscreen), *Weather* (violence as

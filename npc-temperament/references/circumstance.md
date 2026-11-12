@@ -85,6 +85,13 @@ amended from Fear-Aggression, because grief."
 - **Speech.** One mode each for volume (loud, hushed, soft, low, silent), flow (clipped, short,
   trailing, rambling, broken by breath, flat) and register (formal, procedural). The highest-priority
   circumstance claims each.
+- **Punctuation.** Semicolons, exclamation points and the occasional word in CAPITALS are all
+  allowed. The engine names what suits the person and the moment: CAPITALS only with exclamations
+  when someone shouts (shouting forms, rage without discipline, fear or pain in the volatile);
+  easy exclamations for bright, festive, drunk or excitable people; semicolons for measured,
+  formal, solemn or dutiful speech, never while drunk, exhausted or enraged. Frozen and stunned
+  people get none; clarity takes the capitals away. At most two notes, and capitals never sit with
+  semicolons. Used a few times a scene, not on every line. The audit checks all of this.
 - **Quirks.** Idle and social quirks stop under stress (hurt, frozen, afraid, enraged, stunned,
   tending, grieving, solemn, superior). Stress quirks surface (never sits with back to a door,
   third person when nervous, touches a lucky object, laughs at the wrong moments). Compulsive and
