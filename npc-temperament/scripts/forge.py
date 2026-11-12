@@ -1759,6 +1759,8 @@ def cmd_affinity(a):
            "debtor": 0, "master": 0, "dependant": 1}.get(a.tie or "", 0)
     parts.append(("tie " + (a.tie or "none"), tie))
     total = clamp(sum(p[1] for p in parts), -5, 5)
+    VIEW.clear()
+    VIEW.update({"cmd": "affinity", "a": x["name"], "b": y["name"], "regard": total})
     print("Regard %s <-> %s: %+d (%s)" % (x["name"], y["name"], total,
                                           ", ".join("%s %+d" % p for p in parts)))
     print("Use it as trust between them; each still reacts through their own mood and manner.")
