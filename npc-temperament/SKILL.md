@@ -134,6 +134,8 @@ Roll the day before the scene. It decides:
 - **The contradiction's side** today, by its ratio.
 - **Openness**: whether today they'd speak of their drive.
 - **Temptation** for compulsions; codes at risk from starving needs.
+- **Trailing speech**: a small chance they trail off with ellipses today, only if tired or
+  pondering.
 
 ## Each encounter: mood from causes
 
@@ -174,6 +176,7 @@ All rolled upstream (before the scene or when a character is created), never as 
 | **Hidden turn** | 2–5% per scene per character in focus (10% outliers); at most one per scene | Something happened offscreen (news by a real route, a tie event, a decision ripening). Behaviour shifts; the cause comes out later or never. |
 | **Slip** | for masked characters, rolled at scene start | If pressed, or alone with someone trusted, one Core beat shows. Only at or after a deception. |
 | **Danger history** | 0–5% per danger category, rolled once at creation | When that kind of danger is in the scene: mood ±1 and a characteristic beat. Never dominates. |
+| **Trailing speech** | 0% normally; up to 8% per day when tired (a hungry body, no rest, pain, sickness: 4%) or pondering (curious minds, brooding voices, a day that touched their drive: 3%) | A few ellipses across their lines that day ("I… suppose so."), not every line. Never on anyone who isn't tired or pondering, and never used as a sign of lying. |
 | **Oddity** | 1% per scene, at most one | A small strange behaviour. Uncanny ones only if Strangeness ≥2. Never reveals hidden information. |
 
 ## Memory and slow change

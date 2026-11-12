@@ -708,8 +708,15 @@ def cmd_day(a):
         newt = drive_target(n)
         if newt != drv["rung"] and wts[newt] * deficit(st[newt]) >= 4:
             notes.append("pressure has moved to %s; consider whether their drive shifts there (slowly)" % newt)
+    tired = st["Comfort"] <= -1 or st["Survival"] <= -1 or any(
+        w in cause for w in ("slept badly", "sick", "pain", "cold or heat", "hungry"))
+    ponder = n["axes"][O] >= 2 or lv["style"] in ("Visionary", "Serious", "Solitary") or opened
+    chance = min(8, (4 if tired else 0) + (3 if ponder else 0))
+    trailing = None
+    if chance and d(100) <= chance:
+        trailing = "tired" if (tired and (not ponder or d(2) == 1)) else "pondering"
     n["today"] = {"day": n["day"], "rung": rung, "value": val, "cause": cause, "mood": mood,
-                  "voice": lv["style"], "side": side, "open": open_today}
+                  "voice": lv["style"], "side": side, "open": open_today, "trailing": trailing}
     derive(n)
     print("Day %d for %s: %s (%s %+d) x%s%s = %+d to mood" % (
         n["day"], n["name"], cause, rung, val, sens, " %+d circle echo" % echo if echo else "", mood))
@@ -718,6 +725,9 @@ def cmd_day(a):
     print("Open to speaking of their drive today: %s%s" % (
         "yes" if open_today else "no", " (the day touched it)" if opened else " (d10=%d vs %d)" % (
             oroll, n["derived"]["openness_target"])))
+    if trailing:
+        print("Speech today: trailing off now and then (%s). A few ellipses across the scene, not every line."
+              % trailing)
     for x in notes:
         if x:
             print("Note: " + x)
@@ -841,6 +851,8 @@ def cmd_meet(a):
             plan += "; prefers deception at any strength"
         print("Stratagem (strength %d vs their estimate %d): %s" % (own, a.their_strength, plan))
     print("Contradiction side today: %s of %s" % (td["side"], n["contradiction"]["pair"]))
+    if td.get("trailing"):
+        print("Speech: trails off now and then (%s)." % td["trailing"])
 
 
 def cmd_ask(a):

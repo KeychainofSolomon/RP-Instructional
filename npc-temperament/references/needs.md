@@ -69,7 +69,11 @@ If the dominant voice is Zealot, Self-Sacrificing or Predator, Inverted starts a
 5. **Circle echo**: if their circle rolled a day, half its value (rounded toward zero) hits
    the same rung for them.
 6. **Mood today** = value × sensitivity + echo.
-7. Then: leading voice, contradiction side, openness, temptation (personality.md,
+7. Trailing speech: tired (Comfort or Survival Wanting or worse, or a day of no sleep, pain,
+   sickness, hunger or exposure) adds 4%; pondering (Openness ≥ 2, a Visionary, Serious or
+   Solitary voice leading, or a day that touched their drive) adds 3%; cap 8%. On a hit
+   (d100), they trail off with an ellipsis now and then that day.
+8. Then: leading voice, contradiction side, openness, temptation (personality.md,
    interaction.md, tables.md).
 
 ## 6. Day causes
