@@ -251,6 +251,10 @@ STRATAGEMS = [(3, "Overwhelm: confront openly, or toy with them"), (1, "Press: d
               (-99, "Yield, flee, or appeal to a stronger power")]
 
 
+SCENE_ABSENT = []
+VIEW = {}   # structured result of the last command, for programs that drive the engine
+
+
 def d(n):
     return random.randint(1, n)
 
@@ -776,6 +780,10 @@ def cmd_day(a):
         if x:
             print("Note: " + x)
     save(n, a.file)
+    VIEW.clear()
+    VIEW.update({"cmd": "day", "name": n["name"], "cause": cause, "value": val, "rung": rung,
+                 "open": open_today, "trailing": trailing, "notes": [x for x in notes if x],
+                 "lasting": {k: v for k, v in af.items() if k not in ("grief_delay", "grief_pending")}})
 
 
 def drift_authenticity(n, step):
@@ -1332,6 +1340,20 @@ def cmd_meet(a):
         sp.append("trails off now and then")
     if sp:
         print("Speech: " + ", ".join(sp))
+    L = locals()
+    VIEW.clear()
+    VIEW.update({
+        "cmd": "meet", "name": n["name"], "who": a.who, "band": band, "intensity": intensity(mood, band, n).strip(),
+        "form": form, "amended": form != raw, "active": list(active), "colour": list(infl), "yielded": list(yielded),
+        "voice_forward": vstyle if vstyle != td["voice"] else None,
+        "thought": ({"text": L["th"][0], "hold": L["hold"], "level": L["lvl"], "ripple": L["rip"],
+                     "guess": L["th"][1] if L["lvl"] >= 1 else None} if td.get("thought") else None),
+        "face": au["kind"] if face_on else None, "core": L.get("core") if face_on else None,
+        "face_dropped": (not face_on) and au["kind"] != "Genuine",
+        "violence_steady": bool(a.violence and td.get("shaken") is None),
+        "shaken": td.get("shaken"), "danger_beat": lean, "danger_replaces": bool(lean and L.get("fits")),
+        "stratagem": plan, "quirks": qs, "speech": sp, "today": td.get("cause"),
+    })
 
 
 def cmd_audit(a):
@@ -1610,31 +1632,39 @@ def cmd_audit(a):
     print("No unhandled combinations.")
 
 
+def _ask_out(kind, msg, text=None, shape=None):
+    VIEW.clear()
+    VIEW.update({"cmd": "ask", "result": kind, "text": text, "shape": shape})
+    print(msg)
+
+
 def cmd_ask(a):
     n = load(a.file)
     dr = n["drive"]
     if n["condition"] != "present":
-        print("NO ASK. They are %s." % n["condition"]); return
+        _ask_out("no", "NO ASK. They are %s." % n["condition"]); return
     if dr["type"] != "Open":
-        print("NO ASK. Drive is %s: decline, deflect, or a trivial courtesy at most." % dr["type"]); return
+        _ask_out("no", "NO ASK. Drive is %s: decline, deflect, or a trivial courtesy at most." % dr["type"]); return
     if a.asked:
-        print("NO ASK. Already asked this scene."); return
+        _ask_out("no", "NO ASK. Already asked this scene."); return
     if not a.touched:
-        print("NO ASK. The talk has not touched %s." % dr["rung"]); return
+        _ask_out("no", "NO ASK. The talk has not touched %s." % dr["rung"]); return
     af = n.get("afflictions", {})
     if af.get("grieving") and dr["rung"] != "Belonging":
-        print("NO ASK. They are grieving; nothing else is spoken of now."); return
+        _ask_out("no", "NO ASK. They are grieving; nothing else is spoken of now."); return
     if af.get("sick") and dr["rung"] != "Survival":
-        print("NO ASK. Too sick to raise it."); return
+        _ask_out("no", "NO ASK. Too sick to raise it."); return
     td = n.get("today")
     if not td:
-        print("Roll their day first (the day decides whether they are open)."); return
+        _ask_out("no", "Roll their day first (the day decides whether they are open)."); return
     if not td["open"]:
-        print("NO ASK. Not a day they would speak of it."); return
+        _ask_out("no", "NO ASK. Not a day they would speak of it."); return
     tr, g = total_trust(n, a.who), n["derived"]["guard"]
     if tr < g:
-        print("HINT ONLY. Open today, but trust %d < guard %d: an oblique remark, no request." % (tr, g)); return
-    print("MAY ASK (%s): '%s'. Pride or a code may still make them refuse." % (dr.get("shape", "Partial"), dr["text"]))
+        _ask_out("hint", "HINT ONLY. Open today, but trust %d < guard %d: an oblique remark, no request." % (tr, g),
+                 dr["text"]); return
+    _ask_out("may", "MAY ASK (%s): '%s'. Pride or a code may still make them refuse." % (dr.get("shape", "Partial"),
+             dr["text"]), dr["text"], dr.get("shape", "Partial"))
 
 
 def cmd_event(a):
@@ -1740,6 +1770,7 @@ def cmd_scene(a):
     pairs = [(p, n) for p, n in pairs if n["condition"] not in ("dead", "comatose")]
     if gone:
         print("Not taking part: %s (dead or comatose)" % ", ".join(gone))
+    SCENE_ABSENT[:] = gone
     if not pairs:
         sys.exit("No one present can take part.")
     a.files = [p for p, _ in pairs]
@@ -1747,8 +1778,13 @@ def cmd_scene(a):
     dials = load(a.world)["dials"] if a.world else (ns[0]["dials"] if ns else list(DEFAULT_DIALS))
     lead = max(ns, key=lambda n: n["axes"][M] + n["axes"][E] + RANK.get(n["station"], 0))
     print("[narrator only] Lead of the room: %s" % lead["name"])
+    VIEW.clear()
+    VIEW.update({"cmd": "scene", "lead": lead["name"], "loud": None, "spread_to": [], "hidden_turn": None,
+                 "slips": [], "thoughts": {}, "oddity": None, "absent": []})
     loud = max(ns, key=lambda n: (n["axes"][E], n["axes"][M]))
     sus = [n["name"] for n in ns if n["axes"][V] >= 1 and n is not loud]
+    VIEW["loud"] = loud["name"]
+    VIEW["spread_to"] = sus
     if sus:
         print("Mood carries from %s to: %s (+1 or -1 toward their band, once)" % (loud["name"], ", ".join(sus)))
     turns = [n for n in ns if d(100) <= n["derived"]["agency"]]
@@ -1758,11 +1794,14 @@ def cmd_scene(a):
                  % random.choice(n["ties"])["label"], "a decision about their drive ripened",
                  "a compulsion or old hunger spiked", "they are trying out the other side of themself",
                  "something no table covers, consistent in hindsight"]
-        print("Hidden turn for %s: %s. Let behaviour show it; never explain it." % (n["name"], kinds[d(6) - 1]))
+        hk = kinds[d(6) - 1]
+        VIEW["hidden_turn"] = {"name": n["name"], "what": hk}
+        print("Hidden turn for %s: %s. Let behaviour show it; never explain it." % (n["name"], hk))
     for n in ns:
         if n["authenticity"]["kind"] in ("Masked", "Hollow", "Borrowed", "Shifting"):
             r = d(10)
             if r <= n["derived"]["slip"]:
+                VIEW["slips"].append(n["name"])
                 print("Slip for %s if pressed or alone with someone trusted, and only at or after a deception"
                       % n["name"])
     pl = load(a.place) if getattr(a, "place", None) else None
@@ -1776,6 +1815,7 @@ def cmd_scene(a):
             n["today"]["thought"] = list(th) if th else None
             save(n, path)
         if th:
+            VIEW["thoughts"][n["name"]] = th[0]
             lvl, hold = thought_hold(n, th, [])
             print("A thought arises in %s: %s. Left to itself, %s.%s" % (
                 n["name"], th[0], hold, (" If they wonder where it came from, their own guess: %s."
@@ -1783,7 +1823,9 @@ def cmd_scene(a):
     r = d(100)
     if r == 100:
         pool = ODD_PLAIN + (ODD_UNCANNY if dial(dials, "X") >= 2 else [])
-        print("Oddity (%s): %s" % (random.choice(ns)["name"], random.choice(pool)))
+        on, oo = random.choice(ns)["name"], random.choice(pool)
+        VIEW["oddity"] = {"name": on, "what": oo}
+        print("Oddity (%s): %s" % (on, oo))
 
 
 def cmd_status(a):
@@ -2601,6 +2643,9 @@ def cmd_violence(a):
     v, o = dial(dials, "V"), dial(dials, "O")
     reg = "Weather" if v >= 3 else "Trade" if (v == 2 or (o >= 2 and dial(dials, "D") >= 2)) else "Rupture"
     print("[narrator only] Register: %s. %s" % (reg, REGISTERS[reg]))
+    VIEW.clear()
+    VIEW.update({"cmd": "violence", "register": reg, "dissonance": [], "aftermath": None, "keeps": None,
+                 "responses": [], "absent": list(gone)})
     k = 2 if reg != "Rupture" else 1 + (d(2) == 2)
     beats = place_dissonance(pl, k) if pl else []
     if len(beats) < k:
@@ -2608,15 +2653,18 @@ def cmd_violence(a):
             print("(The place sheet is thin; add what is always there with `place --add`.)")
         beats += random.sample(DISSONANCE, k - len(beats))
     for beat in beats:
+        VIEW["dissonance"].append(beat)
         print("Dissonance: " + beat)
     now, keeps = random.choice(AFTERMATH)
     print("Aftermath: " + now)
+    VIEW["aftermath"] = now
     if pl is not None:
         if keeps not in pl.setdefault("marks", []):
             pl["marks"].append(keeps)
         pl.setdefault("history", []).append(now)
         save(pl, a.place)
         print("The place keeps: " + keeps)
+        VIEW["keeps"] = keeps
     hurt = set(x.lower() for x in (a.hurt or []))
     members = load(a.circle).get("members", []) if a.circle else []
     for path, n in zip(a.files, ns):
@@ -2633,6 +2681,8 @@ def cmd_violence(a):
                                 "note": "%s hurt" % (a.victim or "someone")})
             fx = apply_affect(n, "witnessed", vc[0], EVENTS["witnessed"][2])
             save(n, path)
+        VIEW["responses"].append({"name": n["name"], "response": r, "desc": RESPONSES[r], "steady": st,
+                                  "relations": rel})
         print("%s (%s%s): %s - %s%s" % (n["name"], processing(n), "; " + "; ".join(rel) if rel else "", r,
                                         RESPONSES[r], " | outwardly unchanged: this is already who they are" if st
                                         else " | outward manner changes for the rest of the day"))
