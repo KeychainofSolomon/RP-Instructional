@@ -262,3 +262,16 @@ npc-temperament/
     ├── time.md                 memory, trust, conditions, lasting states, tides
     └── tables.md               stations, offices, ties, codes, quirks, oddities, danger words
 ```
+
+## Three kinds of confidence
+
+1. **Combinatorial**: `forge.py audit` checks every manner under every combination of up to three
+   circumstances, every mood and a spread of personalities (about 6.6 million combinations), plus
+   speech, strain, ordinary life, thoughts, recovery and knowledge.
+2. **Simulation**: long random campaigns through every command, run from The Chamber of Output.
+3. **Behavioural**: `python npc-temperament/scripts/benchmark.py --seed N` gives twenty people (one
+   per style) identical starts and the same scripted year, then measures consistency (the same
+   person treated the same way in spring and autumn), differentiation (how far apart any two
+   people stay), memory coherence, relationship evolution and repetition. Passing on seeds 1–3.
+   It found and fixed real problems: manners locking into one habit for a year, trait lines
+   repeated every meeting, two people becoming near copies, and relationships converging.

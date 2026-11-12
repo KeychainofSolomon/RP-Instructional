@@ -1007,6 +1007,44 @@ SIDE_TEXT = {
  "Square/Oblong": (("even-handed", {"plain"}), ("angling for advantage", {"covert"})),
 }
 
+SIDE_VARIANTS = {
+ "keeps within bounds": ["keeps within bounds", "careful not to overstep", "stops short of too much"],
+ "goes a step too far": ["goes a step too far", "pushes past where they should stop", "one remark too many"],
+ "an odd turn of phrase": ["an odd turn of phrase", "a strange choice of words", "a phrase that doesn't quite fit"],
+ "by the book": ["by the book", "proper about it", "does it the set way"],
+ "keeps a little apart": ["keeps a little apart", "a half-step back from everyone", "holds something back"],
+ "draws others in": ["draws others in", "pulls people into it", "makes room for others"],
+ "says it straight": ["says it straight", "no hedging", "plain about it"],
+ "a sly edge": ["a sly edge", "a knowing look", "something left unsaid, on purpose"],
+ "pushes": ["pushes", "leans in", "presses the point"],
+ "gives ground": ["gives ground", "lets it go", "steps back"],
+ "very still": ["very still", "barely moves", "hands at rest"],
+ "can't keep still": ["can't keep still", "fidgets", "restless hands"],
+ "blunt": ["blunt", "doesn't soften it", "short and to the point"],
+ "says it sideways": ["says it sideways", "comes at it from the side", "hints instead of saying"],
+ "a lightness under it": ["a lightness under it", "a smile not far off", "easy about it"],
+ "a brooding undertone": ["a brooding undertone", "something heavy underneath", "a shadow in it"],
+ "fair-minded": ["fair-minded", "gives credit where it's due", "weighs both sides"],
+ "a petty jab slips in": ["a petty jab slips in", "a small dig", "a needling aside"],
+ "even-handed": ["even-handed", "level", "evenly weighed"],
+ "angling for advantage": ["angling for advantage", "looking for the edge", "working an angle"],
+}
+
+CHRONIC_VARIANTS = {
+ "eyes go to any food": ["eyes go to any food", "a hollow look about them", "notices every crumb", "thin in the face"],
+ "pale, slow, short of breath": ["pale, slow, short of breath", "a cough they keep swallowing", "moves carefully, as if it hurts"],
+ "heavy-lidded; leans on things": ["heavy-lidded; leans on things", "slow to answer", "rubs their eyes", "sits whenever they can"],
+ "out of habit": ["out of habit", "the way they always do", "by long habit"],
+ "loud, close, leaning in": ["loud, close, leaning in", "voice rising, too near", "in your face", "a finger jabbing the air"],
+ "held very still; every word measured": ["held very still; every word measured", "a dangerous calm", "jaw set, voice level"],
+ "eyes on the exits; small, fast movements": ["eyes on the exits; small, fast movements", "keeps glancing at the door", "jumpy"],
+ "aware of being watched": ["aware of being watched", "plays a little to the room", "glances at who's listening"],
+ "one eye on the post": ["one eye on the post", "never quite off duty", "keeps checking the time"],
+ "low voices, set forms": ["low voices, set forms", "the proper words", "quiet and formal"],
+ "loose: too loud or too slow; says more than they mean": ["loose: too loud or too slow; says more than they mean",
+                                                          "the drink in their voice", "a little too frank"],
+}
+
 
 def _val(x, n):
     return x(n) if callable(x) else x
@@ -1130,8 +1168,9 @@ def colour_for(n, active, side):
         elif t not in notes:
             notes.append(t)
     pair = SIDE_TEXT.get(n["contradiction"]["pair"]) if "contradiction" in n else None
-    if pair:
+    if pair and random.random() < 0.55:
         txt, tg = pair[0 if side == "A" else 1]
+        txt = random.choice(SIDE_VARIANTS.get(txt, [txt]))
         if _blocked_by(tg, active, n):
             dropped.append(txt)
         else:
@@ -1867,8 +1906,14 @@ def cmd_meet(a):
     key = tetrad_key(band)
     use_alt = abs(about_them) > abs(about_you)
     raw = shown[key][1 if use_alt else 0]
+    if not face_on and abs(about_you) <= 1 and abs(about_them) <= 1 and random.random() < 0.2:
+        # nothing strong is pushing them: now and then the rest of their own repertoire shows
+        raw = tetrad(SBY[vstyle][{"Kind": "kind", "Middle": "mid", "Hostile": "host"}[key]])
     habit_note = None
     hf = habit_form(n, key, active)
+    # a habit fills the gaps now and then, more as it deepens; it never takes over every meeting
+    if hf and random.random() >= ((n.get("inclinations") or {}).get(hf, {}).get("strength", 0) - 0.3):
+        hf = None
     if hf and hf != raw and abs(about_you) <= 2 and abs(about_them) <= 2:
         raw, habit_note = hf, "out of habit"
     form, soft, ok, yielded = resolve(raw, key, active, n)
@@ -1879,7 +1924,8 @@ def cmd_meet(a):
         if not _blocked_by(RESP[rs][2], higher, n) and RESP[rs][1] not in infl:
             infl.insert(0, RESP[rs][1])
     side_note = infl.pop() if (infl and SIDE_TEXT.get(n["contradiction"]["pair"]) and
-                               infl[-1] in [x[0] for x in SIDE_TEXT[n["contradiction"]["pair"]]]) else None
+                               infl[-1] in [v for x in SIDE_TEXT[n["contradiction"]["pair"]]
+                                            for v in SIDE_VARIANTS.get(x[0], [x[0]])]) else None
     infl += soft + exempt_notes
     if habit_note and form == raw:
         infl.append(habit_note)
@@ -1897,6 +1943,16 @@ def cmd_meet(a):
     fw = feeling_words((n.get("affect") or {}).get("feeling", 0))
     if fw and "clear" not in active and not ({"hurt", "frozen"} & set(active)):
         infl.append(fw)
+    # the same state can last for weeks; the same words for it shouldn't come every time
+    prev, fresh, bases = set(n.get("last_colour") or []), [], []
+    for line in infl:
+        base = line
+        line = random.choice(CHRONIC_VARIANTS[line]) if line in CHRONIC_VARIANTS else line
+        if base in prev and len(infl) > 1 and random.random() < 0.5:
+            continue
+        fresh.append(line); bases.append(base)
+    infl = fresh
+    n["last_colour"] = bases
     tint = {"Cool": "colder ", "Warm": "warmer "}.get(band, "")
     print("[narrator only] %s toward %s" % (n["name"], a.who))
     print("Mood %+d = baseline %+d, their day %+d (%s), chronic %+d, feeling %+d, trust %+d, approach %+d, "
@@ -1928,7 +1984,7 @@ def cmd_meet(a):
                                      % (th[1] or "nothing they can name")) if lvl >= 1 else ""))
     if form in FORM_TAGS and not form.startswith("Wounded") and not a.dry_run:
         axes_ = [ax for tg in FORM_TAGS[form] for ax in TAG_AXES.get(tg, [])]
-        for note in incline(n, form, axes_):
+        for note in incline(n, form, axes_, gain=0.5):
             print("Inclination: " + note)
         save(n, a.file)
     if face_on:
@@ -2513,7 +2569,19 @@ def cmd_event(a):
         if n["authenticity"]["kind"] == "Hollow" and sign > 0 and a.kind not in ("rescue", "gift"):
             delta = 0
             notes.append("performs gratitude; nothing moves underneath")
-        if abs(delta) >= 2:
+        took_ = strain_of(n)[EVENT_STRAIN[a.kind]] if a.kind in EVENT_STRAIN else None
+        to_bedrock = abs(delta) >= 2
+        if took_ in ("reconcile", "self_blame", "appease") and delta < 0:
+            delta = int(delta / 2)                       # the bond matters more, or the fault is theirs
+        elif took_ in ("retaliate_later", "coldness", "laugh_remember") and delta < 0:
+            to_bedrock = True                            # it goes deep and stays
+            delta -= 1 if took_ == "retaliate_later" else 0
+        elif took_ == "suspects" and delta > 0:
+            delta = 0                                    # praise makes them wary, not warmer
+        elif took_ in ("basks", "shares") and delta > 0:
+            delta += 1
+        delta = int(round(delta * clamp(n["derived"]["sensitivity"], 0.5, 1.5))) if delta else 0
+        if to_bedrock:
             t["bedrock"] = clamp(t["bedrock"] + delta, -5, 5)
         else:
             t["surface"] = clamp(t["surface"] + delta, -3, 3)
@@ -2952,14 +3020,15 @@ INCLINE_FADE = 0.01
 INCLINE_PRESS = 0.15
 
 
-def incline(n, key, axes=None, times=1):
-    """Someone did or showed `key` again. Returns notes."""
+def incline(n, key, axes=None, times=1, gain=1.0):
+    """Someone did or showed `key` again. Returns notes. A manner shown in passing builds slowly
+    (gain below one); an act done on purpose builds at the full rate."""
     inc = n.setdefault("inclinations", {})
     rec = inc.setdefault(key, {"strength": 0.0, "count": 0, "last": n["day"]})
     notes = []
     before = rec["strength"]
     for _ in range(times):
-        rec["strength"] = round(rec["strength"] + INCLINE_GAIN * (1 - rec["strength"]), 4)
+        rec["strength"] = round(rec["strength"] + gain * INCLINE_GAIN * (1 - rec["strength"]), 4)
         rec["count"] += 1
         for axis, sgn in (axes or []):
             affect(n)["pressure"][axis] += sgn * INCLINE_PRESS
@@ -2967,10 +3036,11 @@ def incline(n, key, axes=None, times=1):
     if before < 0.5 <= rec["strength"]:
         notes.append("%s has become a habit: it fills the gaps when nothing else decides" % key)
     same = [c for c in n["compulsions"] if c["urge"].lower() == key.lower() or c.get("from_habit") == key]
-    if rec["strength"] >= 0.7 and not same:
+    comp_at = 0.85 if key in FORM_TAGS else 0.7
+    if rec["strength"] >= comp_at and not same:
         n["compulsions"].append({"urge": key, "control": 9, "threshold": 3, "pressure": 0, "from_habit": key})
         notes.append("%s has become a compulsion (control 9)" % key)
-    elif rec["strength"] >= 0.7 and same and not same[0].get("fed_by_habit"):
+    elif rec["strength"] >= comp_at and same and not same[0].get("fed_by_habit"):
         c0 = same[0]
         c0["control"] = max(6, c0["control"] - 3)
         c0["threshold"] = c0["control"] // 3
