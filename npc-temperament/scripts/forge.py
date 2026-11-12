@@ -541,8 +541,13 @@ def total_trust(n, who):
 
 
 def load(p):
-    with open(p, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        sys.exit("No such file: %s" % p)
+    except ValueError:
+        sys.exit("Not a valid ledger file: %s" % p)
 
 
 def save(n, p):
@@ -999,9 +1004,10 @@ def cmd_status(a):
 
 
 def cmd_tide(a):
-    try:
+    import os
+    if os.path.exists(a.world):
         w = load(a.world)
-    except FileNotFoundError:
+    else:
         w = {"dials": parse_dials(a.dials), "week": 0, "history": []}
     w["week"] += 1
     i = d(7) - 1
