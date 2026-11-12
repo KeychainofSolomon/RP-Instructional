@@ -940,7 +940,7 @@ def cmd_event(a):
         n["marks"][key] = n["marks"].get(key, 0) + 1
         if n["marks"][key] >= 3:
             last = n["shifts"].get(AX[axis], -999)
-            if n["day"] - last >= 30:
+            if n["day"] - last >= 30 and clamp(n["axes"][axis] + s, -3, 3) != n["axes"][axis]:
                 n["axes"][axis] = clamp(n["axes"][axis] + s, -3, 3)
                 n["shifts"][AX[axis]] = n["day"]
                 n["marks"][key] = 0
